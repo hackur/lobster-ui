@@ -1,0 +1,136 @@
+name: complete-workflow-demo
+description: Comprehensive demo showcasing all Lobster workflow features
+args:
+  repo:
+    default: owner/repo
+    description: GitHub repository in owner/repo format
+  pr_numbers:
+    default: "[1, 2, 3]"
+    description: Array of PR numbers to process
+  notify_channel:
+    default: "#general"
+    description: Slack channel to notify
+env:
+  LOBSTER_MODE: production
+  LOG_LEVEL: info
+cwd: /app
+steps:
+  # 1. Basic run command
+  - id: greet
+    run: echo "Starting workflow at $(date)"
+
+  # 2. Command with environment variables
+  - id: check_env
+    command: env | grep -E "^(LOBSTER_|LOG_)" | sort
+    env:
+      CUSTOM_VAR: custom_value
+      EXTRA_INFO: "from workflow"
+
+  # 3. Pipeline step (Lobster pipeline)
+  - id: fetch_prs
+    pipeline: >
+      gh pr list --repo ${repo} --state open --json number,title,state
+    env:
+      GH_TOKEN: ${GITHUB_TOKEN}
+
+  # 4. Step with stdin from previous step
+  - id: process_prs
+    run: jq '.[] | .number' -r
+    stdin: $fetch_prs.json
+
+  # 5. Conditional step with 'when'
+  - id: has_prs
+    run: test -n "$INPUT" && echo "yes" || echo "no"
+    stdin: $process_prs.stdout
+    when: $fetch_prs.exitCode == 0
+
+  # 6. Approval gate
+  - id: confirm_proceed
+    approval: |
+      Proceed with processing ${repo}?
+      Found PRs in repository.
+    when: $has_prs.stdout == "yes"
+
+  # 7. Parallel execution
+  - id: parallel_fetch
+    parallel:
+      wait: all
+      timeout_ms: 30000
+      branches:
+        - id: fetch_issues
+          run: gh issue list --repo ${repo} --state all --limit 10 --json number,title,state
+        - id: fetch_stars
+          run: gh repo view ${repo} --json stargazerCount
+        - id: fetch_forks
+          run: gh repo view ${repo} --json forkCount
+    when: $confirm_proceed.approved == true
+
+  # 8. For each loop
+  - id: process_each_pr
+    for_each: $fetch_prs.json
+    item_var: pr
+    index_var: idx
+    batch_size: 2
+    pause_ms: 500
+    steps:
+      - id: get_pr_detail
+        run: gh pr view ${pr.number} --repo ${repo} --json title,body,state
+      - id: summarize
+        pipeline: >
+          llm.invoke --prompt "Summarize this PR in one sentence: ${pr.title}"
+
+  # 9. Input request
+  - id: get_feedback
+    input:
+      prompt: What is the priority for this workflow run? (low/medium/high)
+      responseSchema:
+        type: object
+        properties:
+          priority:
+            type: string
+            enum: [low, medium, high]
+        required: [priority]
+      defaults:
+        priority: medium
+
+  # 10. Workflow call (sub-workflow)
+  - id: run_sub_workflow
+    workflow: ./sub-workflow.yaml
+    workflow_args:
+      repo: ${repo}
+      base_branch: main
+
+  # 11. Retry configuration
+  - id: flaky_api_call
+    run: curl -s https://api.example.com/data
+    retry:
+      max: 3
+      backoff: exponential
+      delay_ms: 1000
+      max_delay_ms: 10000
+      jitter: true
+
+  # 12. Timeout
+  - id: long_running_task
+    run: sleep 5 && echo "done"
+    timeout_ms: 30000
+
+  # 13. On error handling
+  - id: might_fail
+    run: ./risky-operation.sh
+    on_error: continue
+    timeout_ms: 60000
+
+  # 14. Continue after error
+  - id: cleanup
+    run: echo "Cleaning up..."
+    when: $might_fail.exitCode != 0
+
+  # 15. Final step
+  - id: notify
+    run: echo "Workflow complete. Priority: ${get_feedback.response.priority}"
+    stdin: $get_feedback.response.json
+
+  # 16. Exit
+  - id: done
+    run: echo "All done!"

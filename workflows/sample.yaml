@@ -1,0 +1,46 @@
+name: weather-advisor
+description: Get weather and advise on clothing
+args:
+  location:
+    default: Phoenix
+    description: City to get weather for
+  use_celsius:
+    default: false
+    description: Use Celsius instead of Fahrenheit
+env:
+  WEATHER_API_KEY: ${WEATHER_API_KEY}
+steps:
+  - id: fetch_weather
+    run: weather --json ${location}
+    timeout_ms: 10000
+    retry:
+      max: 3
+      backoff: exponential
+      delay_ms: 1000
+
+  - id: check_temp
+    pipeline: >
+      llm.invoke --prompt "Is it hot outside? Return JSON with hot: boolean"
+    stdin: $fetch_weather.json
+    when: $fetch_weather.exitCode == 0
+
+  - id: confirm_advice
+    approval:
+      prompt: Want jacket advice from the LLM?
+      required_approver: team-lead
+      require_different_approver: true
+    stdin: $check_temp.json
+
+  - id: get_advice
+    pipeline: >
+      llm.invoke --prompt "Given this weather data, should I wear a jacket? Be concise."
+    stdin: $fetch_weather.json
+    when: $confirm_advice.approved == true
+    condition: $confirm_advice.approved == true
+
+  - id: notify
+    run: echo "Weather check complete"
+    env:
+      WEATHER_RESULT: "$check_temp.json"
+    condition: $get_advice.exitCode == 0
+    on_error: continue

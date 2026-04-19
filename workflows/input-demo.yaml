@@ -1,0 +1,39 @@
+name: input-demo
+description: Demonstrates user input requests during workflow execution
+steps:
+  - id: start
+    run: echo "Starting input demo"
+
+  - id: get_environment
+    input:
+      prompt: Which environment should we deploy to?
+      responseSchema:
+        type: object
+        properties:
+          environment:
+            type: string
+            enum: [development, staging, production]
+          region:
+            type: string
+            enum: [us-east, us-west, eu-west]
+        required: [environment]
+      defaults:
+        environment: development
+        region: us-east
+
+  - id: deploy
+    run: echo "Deploying to ${get_environment.response.environment} in ${get_environment.response.region}"
+    stdin: $get_environment.json
+
+  - id: confirm_rollback
+    approval:
+      prompt: "Deployment complete. Rollback if there are issues?"
+      initiated_by: system
+
+  - id: rollback
+    run: echo "Rolling back deployment"
+    when: $confirm_rollback.approved == false
+    condition: $confirm_rollback.approved == false
+
+  - id: done
+    run: echo "Input demo finished"

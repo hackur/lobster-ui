@@ -1,0 +1,30 @@
+name: parallel-demo
+description: Demonstrates parallel branch execution
+steps:
+  - id: start
+    run: echo "Starting parallel demo"
+
+  - id: parallel_tasks
+    parallel:
+      wait: all
+      timeout_ms: 10000
+      branches:
+        - id: task_a
+          run: echo "Task A starting" && sleep 1 && echo "Task A done"
+          env:
+            TASK_NAME: A
+        - id: task_b
+          run: echo "Task B starting" && sleep 2 && echo "Task B done"
+          env:
+            TASK_NAME: B
+        - id: task_c
+          run: echo "Task C starting" && sleep 0.5 && echo "Task C done"
+          env:
+            TASK_NAME: C
+
+  - id: collect_results
+    run: echo "All parallel tasks completed"
+    when: $task_a.exitCode == 0
+
+  - id: done
+    run: echo "Parallel demo finished"

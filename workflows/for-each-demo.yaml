@@ -1,0 +1,32 @@
+name: for-each-demo
+description: Demonstrates for_each loop execution
+args:
+  items:
+    default: "[1, 2, 3, 4, 5]"
+    description: Items to iterate over
+steps:
+  - id: start
+    run: echo "Starting for_each demo with items: ${items}"
+
+  - id: define_items
+    run: echo '[{"id": 1, "name": "item1"}, {"id": 2, "name": "item2"}, {"id": 3, "name": "item3"}]'
+
+  - id: process_items
+    for_each: $define_items.json
+    item_var: item
+    index_var: idx
+    batch_size: 2
+    pause_ms: 100
+    steps:
+      - id: process_item
+        run: echo "Processing item ${item.id}: ${item.name} (index ${idx})"
+      - id: transform
+        pipeline: >
+          llm.invoke --prompt "Transform this: ${item.name}"
+
+  - id: summarize
+    run: echo "Processed all items"
+    when: $process_item.exitCode == 0
+
+  - id: done
+    run: echo "For_each demo finished"
