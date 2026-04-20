@@ -14,11 +14,14 @@ A visual editor for Lobster workflow files. Built with Next.js, React Flow, and 
 
 ## Features
 
-- Discover and list workflows from configured directories
-- Visualize workflow steps as nodes in React Flow
-- Edit step properties (id, command, stdin, condition, approval)
-- Save changes back to disk
-- Validate workflows before save
+- Discover and list workflows from multiple local directories
+- **Visual Canvas:** Visualize workflow steps as nodes in React Flow
+- **Source Editor:** Switch to raw code view with direct YAML/JSON editing
+- **Layout Persistence:** Node positions are automatically saved to `.lobster-ui.layout.[filename].json`
+- **Undo/Redo:** Full history support for workflow modifications
+- Edit step properties (id, command, stdin, condition, approval) via inspector
+- Save changes back to disk (including raw source edits)
+- Real-time validation for schema compliance and step references
 - Dark mode support
 
 ## Getting Started
