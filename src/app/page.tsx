@@ -29,6 +29,7 @@ export default function Home() {
     setViewMode,
     undo,
     redo,
+    envWarnings,
   } = useWorkflowStore();
 
   const { theme, setTheme } = useTheme();

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { type LobsterWorkflow, type WorkflowFile, type WorkflowLayout, type AppSettings } from "./schema";
+import { type LobsterWorkflow, type WorkflowFile, type WorkflowLayout, type AppSettings, type EnvFile } from "./schema";
 
 interface WorkflowState {
   workflows: WorkflowFile[];
@@ -13,8 +13,11 @@ interface WorkflowState {
   viewMode: "canvas" | "source";
   history: { past: LobsterWorkflow[]; future: LobsterWorkflow[] };
   selectedWorkflowPath: string | null;
+  envFiles: EnvFile[];
+  envWarnings: string[];
 
   loadWorkflows: (dirs: string[]) => Promise<void>;
+  loadEnvFiles: (dirs: string[]) => Promise<void>;
   selectWorkflow: (path: string | null) => Promise<void>;
   selectNode: (nodeId: string | null) => void;
   updateWorkflow: (path: string, workflow: LobsterWorkflow, addToHistory?: boolean) => void;
@@ -28,6 +31,13 @@ interface WorkflowState {
   createWorkflow: (name: string, dir: string) => Promise<string | null>;
   setViewMode: (mode: "canvas" | "source") => void;
   updateWorkflowFromRaw: (path: string, rawContent: string) => void;
+  updateEnvFile: (path: string, variables: Record<string, string>, isSecret: Record<string, boolean>) => Promise<void>;
+  validateEnvReferences: () => void;
+  undo: () => void;
+  redo: () => void;
+  canUndo: () => boolean;
+  canRedo: () => boolean;
+}
   undo: () => void;
   redo: () => void;
   canUndo: () => boolean;
@@ -106,6 +116,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   settings: {
     workflowDirs: [],
     uiTheme: "system",
+    envFiles: [],
   },
   dirtyWorkflows: {},
   validationErrors: [],
@@ -113,10 +124,129 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   viewMode: "canvas",
   history: { past: [], future: [] },
   selectedWorkflowPath: null,
+  envFiles: [],
+  envWarnings: [],
 
   loadWorkflows: async (dirs: string[]) => {
     const allWorkflows = await fetchWorkflowsFromAPI(dirs);
     set({ workflows: allWorkflows, dirtyWorkflows: {} });
+    
+    // Also load env files from the same directories
+    for (const dir of dirs) {
+      try {
+        const response = await fetch(`/api/env?dir=${encodeURIComponent(dir)}`);
+        if (response.ok) {
+          const data = await response.json();
+          const { envFiles } = get();
+          const existingPaths = new Set(envFiles.map(e => e.path));
+          const newEnvFiles = data.envFiles.filter((e: EnvFile) => !existingPaths.has(e.path));
+          set({ envFiles: [...envFiles, ...newEnvFiles] });
+        }
+      } catch (error) {
+        console.error("Failed to load env files:", error);
+      }
+    }
+    
+    // Validate env references after loading
+    get().validateEnvReferences();
+  },
+
+  loadEnvFiles: async (dirs: string[]) => {
+    const allEnvFiles: EnvFile[] = [];
+    for (const dir of dirs) {
+      try {
+        const response = await fetch(`/api/env?dir=${encodeURIComponent(dir)}`);
+        if (response.ok) {
+          const data = await response.json();
+          allEnvFiles.push(...data.envFiles);
+        }
+      } catch (error) {
+        console.error("Failed to load env files:", error);
+      }
+    }
+    set({ envFiles: allEnvFiles });
+    get().validateEnvReferences();
+  },
+
+  validateEnvReferences: () => {
+    const { workflows, envFiles } = get();
+    const warnings: string[] = [];
+    
+    // Build a set of all available env var names
+    const availableVars = new Set<string>();
+    for (const envFile of envFiles) {
+      for (const key of Object.keys(envFile.variables)) {
+        availableVars.add(key);
+      }
+    }
+    
+    // Check each workflow for missing env references
+    for (const wf of workflows) {
+      if (!wf.workflow.steps) continue;
+      
+      for (const step of wf.workflow.steps) {
+        // Check step commands
+        const cmd = step.run || step.command || step.pipeline || "";
+        const varPattern = /\$\{?([A-Z_][A-Z0-9_]*)\}?/g;
+        let match;
+        
+        while ((match = varPattern.exec(cmd)) !== null) {
+          const varName = match[1];
+          if (!availableVars.has(varName) && !varName.startsWith("LOBSTER_")) {
+            warnings.push(`Workflow ${wf.workflow.name || wf.path}: Step ${step.id} references undefined env var: ${varName}`);
+          }
+        }
+        
+        // Check env block
+        if (step.env) {
+          for (const [key, value] of Object.entries(step.env)) {
+            while ((match = varPattern.exec(value)) !== null) {
+              const varName = match[1];
+              if (!availableVars.has(varName) && !varName.startsWith("LOBSTER_")) {
+                warnings.push(`Workflow ${wf.workflow.name || wf.path}: Step ${step.id} env.${key} references undefined env var: ${varName}`);
+              }
+            }
+          }
+        }
+      }
+      
+      // Check workflow-level env
+      if (wf.workflow.env) {
+        for (const [key, value] of Object.entries(wf.workflow.env)) {
+          while ((match = varPattern.exec(value)) !== null) {
+            const varName = match[1];
+            if (!availableVars.has(varName) && !varName.startsWith("LOBSTER_")) {
+              warnings.push(`Workflow ${wf.workflow.name || wf.path}: env.${key} references undefined env var: ${varName}`);
+            }
+          }
+        }
+      }
+    }
+    
+    set({ envWarnings: warnings });
+  },
+
+  updateEnvFile: async (filePath: string, variables: Record<string, string>, isSecret: Record<string, boolean>) => {
+    try {
+      const response = await fetch("/api/env", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filePath, variables }),
+      });
+      
+      if (response.ok) {
+        const { envFiles } = get();
+        const updated = envFiles.map(ef => 
+          ef.path === filePath 
+            ? { ...ef, variables, isSecret }
+            : ef
+        );
+        set({ envFiles: updated });
+        get().validateEnvReferences();
+      }
+    } catch (error) {
+      console.error("Failed to update env file:", error);
+    }
   },
 
   selectWorkflow: async (path: string | null) => {
