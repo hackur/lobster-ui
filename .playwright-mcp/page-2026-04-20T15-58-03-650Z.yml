@@ -1,0 +1,55 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e4]: lobster-ui
+      - generic [ref=e5]:
+        - button "Visual" [ref=e6]:
+          - img [ref=e7]
+          - text: Visual
+        - button "Source" [ref=e9]:
+          - img [ref=e10]
+          - text: Source
+      - button "Export" [ref=e14]:
+        - img [ref=e15]
+      - button "Import" [ref=e18]:
+        - img [ref=e19]
+      - button "Dark mode" [ref=e22]:
+        - img [ref=e23]
+      - button "Settings" [ref=e25]:
+        - img [ref=e26]
+      - button "Hide Sidebar" [ref=e29]:
+        - img [ref=e30]
+      - button "Refresh" [ref=e33]:
+        - img [ref=e34]
+      - button "Keyboard Shortcuts" [ref=e39]:
+        - img [ref=e40]
+      - button "Workflow Templates" [ref=e42]:
+        - img [ref=e43]
+      - button "Undo" [disabled]:
+        - img
+      - button "Redo" [disabled]:
+        - img
+      - button "Share Workflow" [disabled]:
+        - img
+      - button "Version History" [disabled]:
+        - img
+      - button "Hide Inspector" [ref=e46]:
+        - img [ref=e47]
+    - generic [ref=e50]:
+      - complementary [ref=e51]:
+        - button "New Workflow" [ref=e53]:
+          - img [ref=e54]
+          - text: New Workflow
+        - generic [ref=e56]:
+          - img [ref=e57]
+          - paragraph [ref=e59]: No workflows found
+          - paragraph [ref=e60]: Configure workflow directories in settings
+      - main [ref=e61]:
+        - generic [ref=e63]:
+          - img [ref=e64]
+          - paragraph [ref=e65]: Select a workflow to view
+          - paragraph [ref=e66]: Or configure directories in settings
+      - complementary [ref=e67]:
+        - generic [ref=e68]: Select a workflow to view details
+  - button "Open Next.js Dev Tools" [ref=e74] [cursor=pointer]:
+    - img [ref=e75]

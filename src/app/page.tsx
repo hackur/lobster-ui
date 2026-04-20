@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { ReactFlowProvider } from "@xyflow/react";
 import { useWorkflowStore } from "@/lib/lobster/store";
 import { workflowsToGraph } from "@/lib/lobster/graph";
-import { type LobsterWorkflow } from "@/lib/lobster/schema";
+import { type LobsterWorkflow, type LobsterStep } from "@/lib/lobster/schema";
 import { WorkflowCanvas } from "@/components/flow/WorkflowCanvas";
 import { WorkflowList } from "@/components/shell/WorkflowList";
 import { InspectorPanel } from "@/components/shell/InspectorPanel";
@@ -115,6 +115,7 @@ export default function Home() {
   const {
     workflows,
     selectedWorkflowId,
+    selectedNodeId,
     dirtyWorkflows,
     layouts,
     loadWorkflows,

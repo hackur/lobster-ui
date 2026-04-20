@@ -682,4 +682,9 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     const { updateWorkflow } = get();
     updateWorkflow(path, version.workflow);
   },
+
+  getStepError: (stepId: string): string | undefined => {
+    const { nodeErrors } = get();
+    return nodeErrors[stepId]?.[0];
+  },
 }));

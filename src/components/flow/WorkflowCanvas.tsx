@@ -42,6 +42,16 @@ export function WorkflowCanvas({
   const { fitView, getNodes } = useReactFlow();
   const [layoutLoading, setLayoutLoading] = useState(false);
 
+  const onNodeClickHandler = useCallback((_: unknown, node: { id: string }) => {
+    onNodeClick?.(node.id);
+  }, [onNodeClick]);
+
+  const defaultEdgeOptions = {
+    type: "smoothstep",
+    animated: false,
+    style: { stroke: "#64748b", strokeWidth: 2 },
+  };
+
   const handleFitView = useCallback(() => {
     fitView({ padding: 0.2 });
   }, [fitView]);

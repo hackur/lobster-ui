@@ -1,0 +1,166 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e4]: lobster-ui
+      - generic [ref=e5]:
+        - button "Visual" [ref=e6]:
+          - img [ref=e7]
+          - text: Visual
+        - button "Source" [ref=e9]:
+          - img [ref=e10]
+          - text: Source
+      - button "Export" [ref=e14]:
+        - img [ref=e15]
+      - button "Import" [ref=e18]:
+        - img [ref=e19]
+      - button "Dark mode" [ref=e22]:
+        - img [ref=e23]
+      - button "Settings" [ref=e25]:
+        - img [ref=e26]
+      - button "Hide Sidebar" [ref=e29]:
+        - img [ref=e30]
+      - button "Refresh" [ref=e33]:
+        - img [ref=e34]
+      - button "Keyboard Shortcuts" [ref=e39]:
+        - img [ref=e40]
+      - button "Workflow Templates" [ref=e42]:
+        - img [ref=e43]
+      - button "Undo" [disabled]:
+        - img
+      - button "Redo" [disabled]:
+        - img
+      - button "Share Workflow" [ref=e46]:
+        - img [ref=e47]
+      - button "Version History" [ref=e53]:
+        - img [ref=e54]
+      - generic "Workflow healthy" [ref=e58]:
+        - img [ref=e59]
+      - button "Hide Inspector" [ref=e62]:
+        - img [ref=e63]
+    - generic [ref=e66]:
+      - complementary [ref=e67]:
+        - generic [ref=e68]:
+          - button "New Workflow" [ref=e69]:
+            - img [ref=e70]
+            - text: New Workflow
+          - button "Duplicate" [ref=e71]:
+            - img [ref=e72]
+            - text: Duplicate
+        - generic [ref=e76]:
+          - generic [ref=e77]:
+            - button "All" [ref=e78]
+            - button "1" [ref=e282]:
+              - img [ref=e80]
+              - text: "1"
+            - button "1" [ref=e283]:
+              - img [ref=e83]
+              - text: "1"
+            - button "Search" [ref=e86]:
+              - img [ref=e87]
+              - text: Search
+          - generic [ref=e91]:
+            - img [ref=e92]
+            - textbox "Search workflows..." [ref=e95]
+          - generic [ref=e96]:
+            - generic [ref=e97]: workflows
+            - generic [ref=e98]:
+              - generic [ref=e99] [cursor=pointer]:
+                - img [ref=e100]
+                - generic [ref=e103]: Final Test
+                - button [ref=e104]:
+                  - img [ref=e105]
+              - generic [ref=e107] [cursor=pointer]:
+                - img [ref=e108]
+                - generic [ref=e111]: input-demo
+                - button [ref=e112]:
+                  - img [ref=e113]
+              - generic [ref=e115] [cursor=pointer]:
+                - img [ref=e116]
+                - generic [ref=e119]: kljh
+                - button [ref=e120]:
+                  - img [ref=e121]
+              - generic [ref=e123] [cursor=pointer]:
+                - img [ref=e124]
+                - generic [ref=e127]: name
+                - button [ref=e128]:
+                  - img [ref=e129]
+              - generic [ref=e131] [cursor=pointer]:
+                - img [ref=e132]
+                - generic [ref=e135]: parallel-demo
+                - button [ref=e136]:
+                  - img [ref=e137]
+              - generic [ref=e139] [cursor=pointer]:
+                - img [ref=e140]
+                - generic [ref=e143]: weather-advisor
+                - button [ref=e144]:
+                  - img [ref=e145]
+      - main [ref=e147]:
+        - textbox [ref=e281]
+      - complementary [ref=e200]:
+        - generic [ref=e201]:
+          - generic [ref=e202]:
+            - heading "Workflow Settings" [level=3] [ref=e204]
+            - generic [ref=e205]:
+              - generic [ref=e206]: Name
+              - textbox "My Workflow" [ref=e207]: Final Test
+            - generic [ref=e208]:
+              - generic [ref=e209]: Description
+              - textbox "What does this workflow do?" [ref=e210]
+            - generic [ref=e211]:
+              - generic [ref=e212]: Working Directory
+              - textbox "/path/to/dir" [ref=e213]
+          - generic [ref=e214]:
+            - heading "Cost Limit" [level=4] [ref=e215]
+            - generic [ref=e216]:
+              - generic [ref=e217]:
+                - generic [ref=e218]: Max USD
+                - spinbutton [ref=e219]
+              - generic [ref=e220]:
+                - generic [ref=e221]: Action
+                - combobox [ref=e222]:
+                  - option "Warn" [selected]
+                  - option "Stop"
+          - generic [ref=e223]:
+            - generic [ref=e224]:
+              - heading "Arguments" [level=4] [ref=e225]
+              - button "+ Add" [ref=e226]
+            - generic [ref=e227]: No arguments defined
+          - generic [ref=e228]:
+            - heading "Workflow Stats" [level=4] [ref=e229]
+            - generic [ref=e230]:
+              - generic [ref=e231]:
+                - generic [ref=e232]: Steps
+                - generic [ref=e233]: "1"
+              - generic [ref=e234]:
+                - generic [ref=e235]: Enabled
+                - generic [ref=e236]: "1"
+              - generic [ref=e237]:
+                - generic [ref=e238]: LLM Steps
+                - generic [ref=e239]: "0"
+              - generic [ref=e240]:
+                - generic [ref=e241]: Parallel
+                - generic [ref=e242]: "0"
+              - generic [ref=e243]:
+                - generic [ref=e244]: Loops
+                - generic [ref=e245]: "0"
+              - generic [ref=e246]:
+                - generic [ref=e247]: Sub-workflows
+                - generic [ref=e248]: "0"
+          - generic [ref=e249]:
+            - heading "Execution Preview" [level=4] [ref=e250]
+            - generic [ref=e251]: "Steps will execute in this order:"
+            - generic [ref=e253]:
+              - generic [ref=e254]: "1."
+              - generic [ref=e255]: step1
+          - generic [ref=e256]:
+            - heading "Steps" [level=4] [ref=e257]
+            - generic [ref=e259]:
+              - generic [ref=e261]: step1
+              - generic [ref=e262]: echo 'Hello World'
+          - generic [ref=e263]:
+            - button "+ Add Step" [ref=e264]
+            - group [ref=e265]:
+              - generic "+ Add from template" [ref=e266] [cursor=pointer]
+  - button "Open Next.js Dev Tools" [ref=e272] [cursor=pointer]:
+    - img [ref=e273]
+  - alert [ref=e276]

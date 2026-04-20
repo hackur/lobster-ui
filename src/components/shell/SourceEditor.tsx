@@ -12,14 +12,19 @@ export function SourceEditor() {
     if (workflowFile) {
       setContent(workflowFile.rawContent);
     }
-  }, [workflowFile]);
+  }, [workflowFile?.path, workflowFile?.rawContent]);
 
-  if (!workflowFile) return null;
+  if (!workflowFile) {
+    return (
+      <div className="h-full flex items-center justify-center text-muted-foreground">
+        <p>Select a workflow to view source</p>
+      </div>
+    );
+  }
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newContent = e.target.value;
     setContent(newContent);
-    // Debounce or only update on blur? The store has updateWorkflowFromRaw
     updateWorkflowFromRaw(workflowFile.path, newContent);
   };
 
