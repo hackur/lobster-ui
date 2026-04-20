@@ -10,11 +10,13 @@ interface WorkflowState {
   isDirty: boolean;
   validationErrors: string[];
   viewMode: "canvas" | "source";
+  history: { past: LobsterWorkflow[]; future: LobsterWorkflow[] };
+  selectedWorkflowPath: string | null;
 
   loadWorkflows: (dirs: string[]) => Promise<void>;
   selectWorkflow: (path: string | null) => Promise<void>;
   selectNode: (nodeId: string | null) => void;
-  updateWorkflow: (path: string, workflow: LobsterWorkflow) => void;
+  updateWorkflow: (path: string, workflow: LobsterWorkflow, addToHistory?: boolean) => void;
   saveWorkflow: (path: string) => Promise<void>;
   updateLayout: (workflowId: string, layout: WorkflowLayout) => Promise<void>;
   addStep: (workflowPath: string, step: { id: string; command: string }) => void;
@@ -25,6 +27,10 @@ interface WorkflowState {
   createWorkflow: (name: string, dir: string) => Promise<string | null>;
   setViewMode: (mode: "canvas" | "source") => void;
   updateWorkflowFromRaw: (path: string, rawContent: string) => void;
+  undo: () => void;
+  redo: () => void;
+  canUndo: () => boolean;
+  canRedo: () => boolean;
 }
 
 async function fetchWorkflowsFromAPI(dirs: string[]): Promise<WorkflowFile[]> {
@@ -103,6 +109,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   isDirty: false,
   validationErrors: [],
   viewMode: "canvas",
+  history: { past: [], future: [] },
+  selectedWorkflowPath: null,
 
   loadWorkflows: async (dirs: string[]) => {
     const allWorkflows = await fetchWorkflowsFromAPI(dirs);
@@ -130,12 +138,26 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     set({ selectedNodeId: nodeId });
   },
 
-  updateWorkflow: (path: string, workflow: LobsterWorkflow) => {
-    const { workflows } = get();
+  updateWorkflow: (path: string, workflow: LobsterWorkflow, addToHistory = true) => {
+    const { workflows, history, selectedWorkflowId } = get();
+    
+    // Add to history if enabled and this is the currently selected workflow
+    let newHistory = history;
+    if (addToHistory && selectedWorkflowId === path) {
+      const wfIndex = workflows.findIndex(w => w.path === path);
+      if (wfIndex !== -1) {
+        const current = workflows[wfIndex].workflow;
+        newHistory = {
+          past: [...history.past, current],
+          future: [],
+        };
+      }
+    }
+
     const updated = workflows.map((w) =>
       w.path === path ? { ...w, workflow } : w
     );
-    set({ workflows: updated, isDirty: true });
+    set({ workflows: updated, isDirty: true, history: newHistory });
     get().validateWorkflow(workflow);
   },
 
@@ -376,4 +398,55 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
     set({ workflows: updatedWorkflows, isDirty: true });
   },
+
+  undo: () => {
+    const { history, selectedWorkflowId, workflows } = get();
+    if (history.past.length === 0 || !selectedWorkflowId) return;
+
+    const previous = history.past[history.past.length - 1];
+    const newPast = history.past.slice(0, -1);
+
+    const wfIndex = workflows.findIndex(w => w.path === selectedWorkflowId);
+    if (wfIndex === -1) return;
+
+    const current = workflows[wfIndex].workflow;
+
+    set({
+      workflows: workflows.map((w, i) => 
+        i === wfIndex ? { ...w, workflow: previous } : w
+      ),
+      history: {
+        past: newPast,
+        future: [current, ...history.future],
+      },
+      isDirty: true,
+    });
+  },
+
+  redo: () => {
+    const { history, selectedWorkflowId, workflows } = get();
+    if (history.future.length === 0 || !selectedWorkflowId) return;
+
+    const next = history.future[0];
+    const newFuture = history.future.slice(1);
+
+    const wfIndex = workflows.findIndex(w => w.path === selectedWorkflowId);
+    if (wfIndex === -1) return;
+
+    const current = workflows[wfIndex].workflow;
+
+    set({
+      workflows: workflows.map((w, i) => 
+        i === wfIndex ? { ...w, workflow: next } : w
+      ),
+      history: {
+        past: [...history.past, current],
+        future: newFuture,
+      },
+      isDirty: true,
+    });
+  },
+
+  canUndo: () => get().history.past.length > 0,
+  canRedo: () => get().history.future.length > 0,
 }));

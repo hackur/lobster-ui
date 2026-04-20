@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { ReactFlowProvider } from "@xyflow/react";
 import { useWorkflowStore } from "@/lib/lobster/store";
 import { workflowsToGraph } from "@/lib/lobster/graph";
 import { WorkflowCanvas } from "@/components/flow/WorkflowCanvas";
@@ -25,6 +26,8 @@ export default function Home() {
     createWorkflow,
     viewMode,
     setViewMode,
+    undo,
+    redo,
   } = useWorkflowStore();
 
   const [showInspector, setShowInspector] = useState(true);
@@ -51,6 +54,41 @@ export default function Home() {
     init();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Cmd/Ctrl + S = Save
+      if ((e.metaKey || e.ctrlKey) && e.key === "s") {
+        e.preventDefault();
+        if (selectedWorkflowId) {
+          saveWorkflow(selectedWorkflowId);
+        }
+      }
+      // Cmd/Ctrl + N = New workflow
+      if ((e.metaKey || e.ctrlKey) && e.key === "n") {
+        e.preventDefault();
+        handleNewWorkflow();
+      }
+      // Cmd/Ctrl + Z = Undo
+      if ((e.metaKey || e.ctrlKey) && e.key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      }
+      // Cmd/Ctrl + Shift + Z or Cmd/Ctrl + Y = Redo
+      if ((e.metaKey || e.ctrlKey) && ((e.key === "z" && e.shiftKey) || e.key === "y")) {
+        e.preventDefault();
+        redo();
+      }
+      // Escape = Deselect node
+      if (e.key === "Escape") {
+        selectNode(null);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedWorkflowId, saveWorkflow, selectNode, undo, redo]);
 
   const handleSave = async () => {
     if (!selectedWorkflowId) return;
@@ -131,13 +169,21 @@ export default function Home() {
         });
         const data = await response.json();
         
+        if (data.error) {
+          alert(data.error);
+          return;
+        }
+        
         const dir = settings.workflowDirs[0] || "/Volumes/JS-DEV/lobster-ui/workflows";
         const path = await createWorkflow(data.workflow.name || "imported", dir);
         
         if (path) {
-          const { updateWorkflow } = useWorkflowStore.getState();
-          updateWorkflow(path, data.workflow);
-          selectWorkflow(path);
+          const { workflows, updateWorkflow } = useWorkflowStore.getState();
+          const wf = workflows.find(w => w.path === path);
+          if (wf) {
+            updateWorkflow(path, data.workflow);
+            selectWorkflow(path);
+          }
         }
       } catch (error) {
         console.error("Import failed:", error);
@@ -178,6 +224,34 @@ export default function Home() {
             Source
           </Button>
         </div>
+        <div className="relative group">
+          <Button variant="ghost" size="icon" title="Export">
+            <Download className="h-4 w-4" />
+          </Button>
+          <div className="absolute right-0 top-full mt-1 w-32 bg-background border rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+            <button
+              className="w-full px-3 py-2 text-left text-sm hover:bg-muted"
+              onClick={() => handleExport("yaml")}
+            >
+              Export YAML
+            </button>
+            <button
+              className="w-full px-3 py-2 text-left text-sm hover:bg-muted"
+              onClick={() => handleExport("json")}
+            >
+              Export JSON
+            </button>
+            <button
+              className="w-full px-3 py-2 text-left text-sm hover:bg-muted"
+              onClick={() => handleExport("mermaid")}
+            >
+              Export Mermaid
+            </button>
+          </div>
+        </div>
+        <Button variant="ghost" size="icon" onClick={handleImport} title="Import">
+          <Upload className="h-4 w-4" />
+        </Button>
         <Button variant="ghost" size="icon" onClick={handleConfigs} title="Settings">
           <Settings className="h-4 w-4" />
         </Button>
@@ -218,13 +292,15 @@ export default function Home() {
         <main className="flex-1 bg-muted/20 relative">
           {workflow ? (
             viewMode === "canvas" ? (
-              <WorkflowCanvas
-                nodes={graph.nodes}
-                edges={graph.edges}
-                onNodeClick={handleNodeClick}
-                onSave={handleSave}
-                isDirty={isDirty}
-              />
+              <ReactFlowProvider>
+                <WorkflowCanvas
+                  nodes={graph.nodes}
+                  edges={graph.edges}
+                  onNodeClick={handleNodeClick}
+                  onSave={handleSave}
+                  isDirty={isDirty}
+                />
+              </ReactFlowProvider>
             ) : (
               <SourceEditor />
             )

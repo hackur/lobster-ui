@@ -4,6 +4,23 @@ import { useWorkflowStore } from "@/lib/lobster/store";
 import { Button } from "@/components/ui/button";
 import { type LobsterStep } from "@/lib/lobster/schema";
 
+interface StepTemplate {
+  id: string;
+  name: string;
+  description: string;
+  step: Partial<LobsterStep>;
+}
+
+const STEP_TEMPLATES: StepTemplate[] = [
+  { id: "run", name: "Run", description: "Shell command", step: { run: "echo 'Hello'" } },
+  { id: "pipeline", name: "Pipeline", description: "LLM pipeline", step: { pipeline: "llm.invoke --prompt ''" } },
+  { id: "approval", name: "Approval", description: "Require approval", step: { approval: "required" } },
+  { id: "input", name: "Input", description: "User input request", step: { input: { prompt: "Enter value:", responseSchema: { type: "string" } } } },
+  { id: "parallel", name: "Parallel", description: "Run branches in parallel", step: { parallel: { branches: [{ id: "branch1", run: "echo '1'" }, { id: "branch2", run: "echo '2'" }] } } },
+  { id: "for_each", name: "For Each", description: "Loop over items", step: { for_each: "$items.json", steps: [{ id: "inner", run: "echo ${item}" }] } },
+  { id: "workflow", name: "Workflow", description: "Call sub-workflow", step: { workflow: "./sub-workflow.yaml" } },
+];
+
 export function InspectorPanel() {
   const {
     workflows,
@@ -96,23 +113,51 @@ export function InspectorPanel() {
           </div>
         </div>
 
-        {/* Add Step Button */}
-        <Button
-          variant="outline"
-          size="sm"
-          className="w-full"
-          onClick={() => {
-            const newId = `step${workflow.workflow.steps.length + 1}`;
-            const newStep: LobsterStep = {
-              id: newId,
-              run: "echo 'Hello'",
-            };
-            const newSteps = [...workflow.workflow.steps, newStep];
-            updateWorkflow(workflow.path, { ...workflow.workflow, steps: newSteps });
-          }}
-        >
-          + Add Step
-        </Button>
+        {/* Add Step Button with Templates */}
+        <div className="space-y-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full"
+            onClick={() => {
+              const newId = `step${workflow.workflow.steps.length + 1}`;
+              const newStep: LobsterStep = {
+                id: newId,
+                run: "echo 'Hello'",
+              };
+              const newSteps = [...workflow.workflow.steps, newStep];
+              updateWorkflow(workflow.path, { ...workflow.workflow, steps: newSteps });
+            }}
+          >
+            + Add Step
+          </Button>
+          
+          <details className="group">
+            <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
+              + Add from template
+            </summary>
+            <div className="mt-2 space-y-1">
+              {STEP_TEMPLATES.map((template) => (
+                <button
+                  key={template.id}
+                  className="w-full text-left px-2 py-1.5 text-xs rounded bg-muted/50 hover:bg-muted transition-colors"
+                  onClick={() => {
+                    const newId = `step${workflow.workflow.steps.length + 1}`;
+                    const newStep: LobsterStep = {
+                      id: newId,
+                      ...template.step,
+                    };
+                    const newSteps = [...workflow.workflow.steps, newStep];
+                    updateWorkflow(workflow.path, { ...workflow.workflow, steps: newSteps });
+                  }}
+                >
+                  <span className="font-medium">{template.name}</span>
+                  <span className="text-muted-foreground ml-2">{template.description}</span>
+                </button>
+              ))}
+            </div>
+          </details>
+        </div>
       </div>
     );
   }

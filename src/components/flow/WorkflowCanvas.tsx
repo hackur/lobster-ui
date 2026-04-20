@@ -11,15 +11,12 @@ import {
   type Edge,
   Panel,
   NodeTypes,
-  onNodesChange,
-  type OnNodesChange,
-  applyNodeChanges,
+  useReactFlow,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { StepNode } from "./nodes/StepNode";
 import { MetadataNode } from "./nodes/MetadataNode";
 import { Button } from "@/components/ui/button";
-import { useWorkflowStore } from "@/lib/lobster/store";
 
 const nodeTypes: NodeTypes = {
   stepNode: StepNode as unknown as NodeTypes[string],
@@ -41,29 +38,13 @@ export function WorkflowCanvas({
   onSave,
   isDirty,
 }: WorkflowCanvasProps) {
+  const { fitView } = useReactFlow();
+
   const onNodeClickHandler = useCallback(
     (_: React.MouseEvent, node: Node) => {
       onNodeClick?.(node.id);
     },
     [onNodeClick]
-  );
-  
-  const { updateLayout, selectedWorkflowId } = useWorkflowStore();
-
-  const handleNodesChange: OnNodesChange = useCallback(
-    (changes) => {
-      if (!selectedWorkflowId) return;
-
-      const newNodes = applyNodeChanges(changes, nodes);
-      const layoutNodes: Record<string, { x: number; y: number }> = {};
-      
-      newNodes.forEach((node) => {
-        layoutNodes[node.id] = node.position;
-      });
-
-      updateLayout(selectedWorkflowId, { nodes: layoutNodes });
-    },
-    [nodes, selectedWorkflowId, updateLayout]
   );
 
   const defaultEdgeOptions = useMemo(
@@ -74,12 +55,15 @@ export function WorkflowCanvas({
     []
   );
 
+  const handleFitView = useCallback(() => {
+    fitView({ padding: 0.2 });
+  }, [fitView]);
+
   return (
     <div className="w-full h-full">
       <ReactFlow
         nodes={nodes}
         edges={edges}
-        onNodesChange={handleNodesChange}
         onNodeClick={onNodeClickHandler}
         nodeTypes={nodeTypes}
         defaultEdgeOptions={defaultEdgeOptions}
@@ -105,6 +89,9 @@ export function WorkflowCanvas({
           maskColor="rgba(0, 0, 0, 0.1)"
         />
         <Panel position="top-right" className="flex gap-2">
+          <Button onClick={handleFitView} variant="outline" size="sm">
+            Fit View
+          </Button>
           {onSave && (
             <Button onClick={onSave} variant={isDirty ? "default" : "outline"} size="sm">
               {isDirty ? "Save*" : "Save"}
