@@ -9,7 +9,7 @@ import { WorkflowList } from "@/components/shell/WorkflowList";
 import { InspectorPanel } from "@/components/shell/InspectorPanel";
 import { SourceEditor } from "@/components/shell/SourceEditor";
 import { Button } from "@/components/ui/button";
-import { Settings, RefreshCw, Plus, PanelRightClose, PanelRightOpen, Menu, Code, Layout, Download, Upload, Sun, Moon } from "lucide-react";
+import { Settings, RefreshCw, Plus, PanelRightClose, PanelRightOpen, Menu, Code, Layout, Download, Upload, Sun, Moon, AlertTriangle } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
 
 export default function Home() {
@@ -274,6 +274,12 @@ export default function Home() {
         >
           <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
         </Button>
+        {envWarnings.length > 0 && (
+          <div className="relative" title={`${envWarnings.length} env warnings`}>
+            <AlertTriangle className="h-4 w-4 text-amber-500" />
+            <span className="absolute -top-1 -right-1 h-2 w-2 bg-amber-500 rounded-full" />
+          </div>
+        )}
         <Button 
           variant="ghost" 
           size="icon"

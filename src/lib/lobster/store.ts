@@ -38,11 +38,6 @@ interface WorkflowState {
   canUndo: () => boolean;
   canRedo: () => boolean;
 }
-  undo: () => void;
-  redo: () => void;
-  canUndo: () => boolean;
-  canRedo: () => boolean;
-}
 
 async function fetchWorkflowsFromAPI(dirs: string[]): Promise<WorkflowFile[]> {
   const allWorkflows: WorkflowFile[] = [];
@@ -180,6 +175,17 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       }
     }
     
+    function extractUndefinedRefs(str: string, context: string) {
+      const varPattern = /\$\{?([A-Z_][A-Z0-9_]*)\}?/g;
+      let match;
+      while ((match = varPattern.exec(str)) !== null) {
+        const varName = match[1];
+        if (!availableVars.has(varName) && !varName.startsWith("LOBSTER_")) {
+          warnings.push(`${context}: references undefined env var: ${varName}`);
+        }
+      }
+    }
+    
     // Check each workflow for missing env references
     for (const wf of workflows) {
       if (!wf.workflow.steps) continue;
@@ -187,38 +193,25 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       for (const step of wf.workflow.steps) {
         // Check step commands
         const cmd = step.run || step.command || step.pipeline || "";
-        const varPattern = /\$\{?([A-Z_][A-Z0-9_]*)\}?/g;
-        let match;
-        
-        while ((match = varPattern.exec(cmd)) !== null) {
-          const varName = match[1];
-          if (!availableVars.has(varName) && !varName.startsWith("LOBSTER_")) {
-            warnings.push(`Workflow ${wf.workflow.name || wf.path}: Step ${step.id} references undefined env var: ${varName}`);
-          }
-        }
+        extractUndefinedRefs(cmd, `Workflow ${wf.workflow.name || wf.path}: Step ${step.id}`);
         
         // Check env block
         if (step.env) {
           for (const [key, value] of Object.entries(step.env)) {
-            while ((match = varPattern.exec(value)) !== null) {
-              const varName = match[1];
-              if (!availableVars.has(varName) && !varName.startsWith("LOBSTER_")) {
-                warnings.push(`Workflow ${wf.workflow.name || wf.path}: Step ${step.id} env.${key} references undefined env var: ${varName}`);
-              }
-            }
+            extractUndefinedRefs(value, `Workflow ${wf.workflow.name || wf.path}: Step ${step.id} env.${key}`);
           }
+        }
+        
+        // Check stdin
+        if (typeof step.stdin === "string") {
+          extractUndefinedRefs(step.stdin, `Workflow ${wf.workflow.name || wf.path}: Step ${step.id} stdin`);
         }
       }
       
       // Check workflow-level env
       if (wf.workflow.env) {
         for (const [key, value] of Object.entries(wf.workflow.env)) {
-          while ((match = varPattern.exec(value)) !== null) {
-            const varName = match[1];
-            if (!availableVars.has(varName) && !varName.startsWith("LOBSTER_")) {
-              warnings.push(`Workflow ${wf.workflow.name || wf.path}: env.${key} references undefined env var: ${varName}`);
-            }
-          }
+          extractUndefinedRefs(value, `Workflow ${wf.workflow.name || wf.path}: env.${key}`);
         }
       }
     }

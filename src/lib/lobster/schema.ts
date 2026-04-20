@@ -162,42 +162,35 @@ export function getEnvVariables(workflow: LobsterWorkflow): string[] {
   const vars = new Set<string>();
   const pattern = /\$\{?([A-Z_][A-Z0-9_]*)\}?/g;
   
-  for (const step of workflow.steps) {
-    const cmd = getStepCommand(step);
+  function extractVars(str: string) {
     let match;
-    while ((match = pattern.exec(cmd)) !== null) {
+    while ((match = pattern.exec(str)) !== null) {
       vars.add(match[1]);
     }
+  }
+  
+  for (const step of workflow.steps) {
+    const cmd = getStepCommand(step);
+    extractVars(cmd);
     
     if (step.env) {
-      for (const key of Object.keys(step.env)) {
-        const value = step.env[key];
-        while ((match = pattern.exec(value)) !== null) {
-          vars.add(match[1]);
-        }
+      for (const [, value] of Object.entries(step.env)) {
+        extractVars(value);
       }
     }
     
-    if (step.stdin && typeof step.stdin === "string") {
-      while ((match = pattern.exec(step.stdin)) !== null) {
-        vars.add(match[1]);
-      }
+    if (typeof step.stdin === "string") {
+      extractVars(step.stdin);
     }
     
     if (step.workflow_args) {
-      const argsStr = JSON.stringify(step.workflow_args);
-      while ((match = pattern.exec(argsStr)) !== null) {
-        vars.add(match[1]);
-      }
+      extractVars(JSON.stringify(step.workflow_args));
     }
   }
   
   if (workflow.env) {
-    for (const key of Object.keys(workflow.env)) {
-      const value = workflow.env[key];
-      while ((match = pattern.exec(value)) !== null) {
-        vars.add(match[1]);
-      }
+    for (const [, value] of Object.entries(workflow.env)) {
+      extractVars(value);
     }
   }
   
