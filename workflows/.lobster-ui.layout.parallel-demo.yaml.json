@@ -1,0 +1,24 @@
+{
+  "nodes": {
+    "workflow-metadata": {
+      "x": 100,
+      "y": 100
+    },
+    "start": {
+      "x": 100,
+      "y": 400
+    },
+    "parallel_tasks": {
+      "x": 100,
+      "y": 560
+    },
+    "collect_results": {
+      "x": 100,
+      "y": 720
+    },
+    "done": {
+      "x": 100,
+      "y": 880
+    }
+  }
+}

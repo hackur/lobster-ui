@@ -11,11 +11,15 @@ import {
   type Edge,
   Panel,
   NodeTypes,
+  onNodesChange,
+  type OnNodesChange,
+  applyNodeChanges,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { StepNode } from "./nodes/StepNode";
 import { MetadataNode } from "./nodes/MetadataNode";
 import { Button } from "@/components/ui/button";
+import { useWorkflowStore } from "@/lib/lobster/store";
 
 const nodeTypes: NodeTypes = {
   stepNode: StepNode as unknown as NodeTypes[string],
@@ -43,6 +47,24 @@ export function WorkflowCanvas({
     },
     [onNodeClick]
   );
+  
+  const { updateLayout, selectedWorkflowId } = useWorkflowStore();
+
+  const handleNodesChange: OnNodesChange = useCallback(
+    (changes) => {
+      if (!selectedWorkflowId) return;
+
+      const newNodes = applyNodeChanges(changes, nodes);
+      const layoutNodes: Record<string, { x: number; y: number }> = {};
+      
+      newNodes.forEach((node) => {
+        layoutNodes[node.id] = node.position;
+      });
+
+      updateLayout(selectedWorkflowId, { nodes: layoutNodes });
+    },
+    [nodes, selectedWorkflowId, updateLayout]
+  );
 
   const defaultEdgeOptions = useMemo(
     () => ({
@@ -57,6 +79,7 @@ export function WorkflowCanvas({
       <ReactFlow
         nodes={nodes}
         edges={edges}
+        onNodesChange={handleNodesChange}
         onNodeClick={onNodeClickHandler}
         nodeTypes={nodeTypes}
         defaultEdgeOptions={defaultEdgeOptions}

@@ -61,7 +61,9 @@ export async function PUT(request: NextRequest) {
     const format = body.format || "yaml";
 
     let content: string;
-    if (format === "json") {
+    if (body.rawContent) {
+      content = body.rawContent;
+    } else if (format === "json") {
       content = JSON.stringify(workflow, null, 2);
     } else {
       const doc = new YAML.Document({

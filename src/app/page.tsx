@@ -6,8 +6,9 @@ import { workflowsToGraph } from "@/lib/lobster/graph";
 import { WorkflowCanvas } from "@/components/flow/WorkflowCanvas";
 import { WorkflowList } from "@/components/shell/WorkflowList";
 import { InspectorPanel } from "@/components/shell/InspectorPanel";
+import { SourceEditor } from "@/components/shell/SourceEditor";
 import { Button } from "@/components/ui/button";
-import { Settings, RefreshCw, Plus, PanelRightClose, PanelRightOpen, Menu } from "lucide-react";
+import { Settings, RefreshCw, Plus, PanelRightClose, PanelRightOpen, Menu, Code, Layout, Download, Upload } from "lucide-react";
 
 export default function Home() {
   const {
@@ -22,6 +23,8 @@ export default function Home() {
     updateSettings,
     settings,
     createWorkflow,
+    viewMode,
+    setViewMode,
   } = useWorkflowStore();
 
   const [showInspector, setShowInspector] = useState(true);
@@ -87,6 +90,62 @@ export default function Home() {
     }
   };
 
+  const handleExport = async (format: string) => {
+    if (!workflow) return;
+    try {
+      const response = await fetch("/api/workflows/export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workflow: workflow.workflow, format }),
+      });
+      const data = await response.json();
+      
+      const blob = new Blob([data.content], { type: data.contentType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = data.filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Export failed:", error);
+    }
+  };
+
+  const handleImport = async () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".yaml,.yml,.json";
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      
+      const content = await file.text();
+      const format = file.name.endsWith(".json") ? "json" : "yaml";
+      
+      try {
+        const response = await fetch("/api/workflows/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content, format }),
+        });
+        const data = await response.json();
+        
+        const dir = settings.workflowDirs[0] || "/Volumes/JS-DEV/lobster-ui/workflows";
+        const path = await createWorkflow(data.workflow.name || "imported", dir);
+        
+        if (path) {
+          const { updateWorkflow } = useWorkflowStore.getState();
+          updateWorkflow(path, data.workflow);
+          selectWorkflow(path);
+        }
+      } catch (error) {
+        console.error("Import failed:", error);
+      }
+    };
+    input.click();
+  };
+
   useEffect(() => {
     if (!selectedWorkflowId && workflows.length > 0) {
       selectWorkflow(workflows[0].path);
@@ -99,6 +158,26 @@ export default function Home() {
       <header className="h-12 border-b bg-background flex items-center px-4 gap-4 shrink-0">
         <div className="font-semibold text-sm">lobster-ui</div>
         <div className="flex-1" />
+        <div className="flex items-center rounded-md border bg-muted/50 p-1">
+          <Button
+            variant={viewMode === "canvas" ? "secondary" : "ghost"}
+            size="sm"
+            className="h-7 px-3 text-xs"
+            onClick={() => setViewMode("canvas")}
+          >
+            <Layout className="h-3.5 w-3.5 mr-1.5" />
+            Visual
+          </Button>
+          <Button
+            variant={viewMode === "source" ? "secondary" : "ghost"}
+            size="sm"
+            className="h-7 px-3 text-xs"
+            onClick={() => setViewMode("source")}
+          >
+            <Code className="h-3.5 w-3.5 mr-1.5" />
+            Source
+          </Button>
+        </div>
         <Button variant="ghost" size="icon" onClick={handleConfigs} title="Settings">
           <Settings className="h-4 w-4" />
         </Button>
@@ -136,15 +215,19 @@ export default function Home() {
         </aside>
 
         {/* Canvas */}
-        <main className="flex-1 bg-muted/20">
+        <main className="flex-1 bg-muted/20 relative">
           {workflow ? (
-            <WorkflowCanvas
-              nodes={graph.nodes}
-              edges={graph.edges}
-              onNodeClick={handleNodeClick}
-              onSave={handleSave}
-              isDirty={isDirty}
-            />
+            viewMode === "canvas" ? (
+              <WorkflowCanvas
+                nodes={graph.nodes}
+                edges={graph.edges}
+                onNodeClick={handleNodeClick}
+                onSave={handleSave}
+                isDirty={isDirty}
+              />
+            ) : (
+              <SourceEditor />
+            )
           ) : (
             <div className="h-full flex items-center justify-center text-muted-foreground">
               <div className="text-center">

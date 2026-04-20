@@ -9,19 +9,22 @@ interface WorkflowState {
   settings: AppSettings;
   isDirty: boolean;
   validationErrors: string[];
+  viewMode: "canvas" | "source";
 
   loadWorkflows: (dirs: string[]) => Promise<void>;
-  selectWorkflow: (path: string | null) => void;
+  selectWorkflow: (path: string | null) => Promise<void>;
   selectNode: (nodeId: string | null) => void;
   updateWorkflow: (path: string, workflow: LobsterWorkflow) => void;
   saveWorkflow: (path: string) => Promise<void>;
-  updateLayout: (workflowId: string, layout: WorkflowLayout) => void;
+  updateLayout: (workflowId: string, layout: WorkflowLayout) => Promise<void>;
   addStep: (workflowPath: string, step: { id: string; command: string }) => void;
   deleteStep: (workflowPath: string, stepId: string) => void;
   validateWorkflow: (workflow: LobsterWorkflow) => string[];
   updateSettings: (settings: Partial<AppSettings>) => void;
   refreshWorkflow: (path: string) => Promise<void>;
   createWorkflow: (name: string, dir: string) => Promise<string | null>;
+  setViewMode: (mode: "canvas" | "source") => void;
+  updateWorkflowFromRaw: (path: string, rawContent: string) => void;
 }
 
 async function fetchWorkflowsFromAPI(dirs: string[]): Promise<WorkflowFile[]> {
@@ -99,14 +102,28 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   },
   isDirty: false,
   validationErrors: [],
+  viewMode: "canvas",
 
   loadWorkflows: async (dirs: string[]) => {
     const allWorkflows = await fetchWorkflowsFromAPI(dirs);
     set({ workflows: allWorkflows, isDirty: false });
   },
 
-  selectWorkflow: (path: string | null) => {
+  selectWorkflow: async (path: string | null) => {
     set({ selectedWorkflowId: path, selectedNodeId: null });
+    if (path) {
+      // Load layout for the selected workflow
+      try {
+        const response = await fetch(`/api/workflows/layout?path=${encodeURIComponent(path)}`);
+        if (response.ok) {
+          const layout = await response.json();
+          const { layouts } = get();
+          set({ layouts: { ...layouts, [path]: layout } });
+        }
+      } catch (error) {
+        console.error("Failed to load layout:", error);
+      }
+    }
   },
 
   selectNode: (nodeId: string | null) => {
@@ -133,9 +150,20 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     }
   },
 
-  updateLayout: (workflowId: string, layout: WorkflowLayout) => {
+  updateLayout: async (workflowId: string, layout: WorkflowLayout) => {
     const { layouts } = get();
     set({ layouts: { ...layouts, [workflowId]: layout } });
+    
+    // Persist layout to disk
+    try {
+      await fetch(`/api/workflows/layout?path=${encodeURIComponent(workflowId)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(layout),
+      });
+    } catch (error) {
+      console.error("Failed to save layout:", error);
+    }
   },
 
   addStep: (workflowPath: string, step: { id: string; command: string }) => {
@@ -315,5 +343,37 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       console.error("Failed to create workflow:", error);
     }
     return null;
+  },
+
+  setViewMode: (mode: "canvas" | "source") => set({ viewMode: mode }),
+
+  updateWorkflowFromRaw: (path: string, rawContent: string) => {
+    const { workflows } = get();
+    const index = workflows.findIndex((w) => w.path === path);
+    if (index === -1) return;
+
+    const updatedWorkflows = [...workflows];
+    const previous = updatedWorkflows[index];
+    
+    // We try to parse it to keep the structured workflow in sync if possible
+    // But we don't block the raw content update if parsing fails
+    let updatedWorkflow = previous.workflow;
+    try {
+      const { LobsterWorkflowSchema } = require("./schema");
+      const YAML = require("yaml");
+      const data = previous.format === "json" ? JSON.parse(rawContent) : YAML.parse(rawContent);
+      updatedWorkflow = LobsterWorkflowSchema.parse(data);
+    } catch (e) {
+      // Parsing failed, we still update rawContent so it can be saved/edited
+      console.warn("Raw parse failed:", e);
+    }
+
+    updatedWorkflows[index] = {
+      ...previous,
+      rawContent,
+      workflow: updatedWorkflow,
+    };
+
+    set({ workflows: updatedWorkflows, isDirty: true });
   },
 }));
