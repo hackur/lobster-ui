@@ -10,7 +10,7 @@ import { WorkflowList } from "@/components/shell/WorkflowList";
 import { InspectorPanel } from "@/components/shell/InspectorPanel";
 import { SourceEditor } from "@/components/shell/SourceEditor";
 import { Button } from "@/components/ui/button";
-import { Settings, RefreshCw, Plus, PanelRightClose, PanelRightOpen, Menu, Code, Layout, Download, Upload, Sun, Moon, AlertTriangle, Keyboard, CheckCircle, XCircle, FilePlus, Undo2, Redo2 } from "lucide-react";
+import { Settings, RefreshCw, Plus, PanelRightClose, PanelRightOpen, PanelLeftClose, PanelLeftOpen, Menu, Code, Layout, Download, Upload, Sun, Moon, AlertTriangle, Keyboard, CheckCircle, XCircle, FilePlus, Undo2, Redo2, Share2, History, Copy, Check, Copy as CopyWorkflow } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
 
 const WORKFLOW_TEMPLATES = [
@@ -130,13 +130,18 @@ export default function Home() {
     redo,
     envWarnings,
     validationErrors,
+    updateWorkflow,
   } = useWorkflowStore();
 
   const { theme, setTheme } = useTheme();
   const [showInspector, setShowInspector] = useState(true);
+  const [showSidebar, setShowSidebar] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
+  const [showShare, setShowShare] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [copiedUrl, setCopiedUrl] = useState(false);
 
   const workflow = workflows.find((w) => w.path === selectedWorkflowId);
   const graph = workflow ? workflowsToGraph(workflow.workflow, layouts[workflow.path]?.nodes) : { nodes: [], edges: [] };
@@ -163,6 +168,11 @@ export default function Home() {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger shortcuts when typing in inputs
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+      
       // Cmd/Ctrl + S = Save
       if ((e.metaKey || e.ctrlKey) && e.key === "s") {
         e.preventDefault();
@@ -189,11 +199,33 @@ export default function Home() {
       if (e.key === "Escape") {
         selectNode(null);
       }
+      // D = Duplicate selected step
+      if (e.key === "d" && !e.metaKey && !e.ctrlKey && selectedNodeId && workflow) {
+        const step = workflow.workflow.steps.find(s => s.id === selectedNodeId);
+        if (step) {
+          const newId = `${step.id}_copy`;
+          const newStep = { ...step, id: newId };
+          delete (newStep as Record<string, unknown>).approval;
+          delete (newStep as Record<string, unknown>).input;
+          delete (newStep as Record<string, unknown>).parallel;
+          delete (newStep as Record<string, unknown>).for_each;
+          delete (newStep as Record<string, unknown>).workflow;
+          const newSteps = [...workflow.workflow.steps, newStep as LobsterStep];
+          updateWorkflow(workflow.path, { ...workflow.workflow, steps: newSteps });
+        }
+      }
+      // Delete/Backspace = Delete selected step
+      if ((e.key === "Delete" || e.key === "Backspace") && selectedNodeId && workflow) {
+        e.preventDefault();
+        const newSteps = workflow.workflow.steps.filter(s => s.id !== selectedNodeId);
+        updateWorkflow(workflow.path, { ...workflow.workflow, steps: newSteps });
+        selectNode(null);
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedWorkflowId, saveWorkflow, selectNode, undo, redo]);
+  }, [selectedWorkflowId, saveWorkflow, selectNode, undo, redo, selectedNodeId, workflow, updateWorkflow]);
 
   // Auto-save with debounce
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -252,6 +284,19 @@ export default function Home() {
     const dir = settings.workflowDirs[0] || "/Volumes/JS-DEV/lobster-ui/workflows";
     const path = await createWorkflow(name, dir);
     if (path) {
+      selectWorkflow(path);
+    }
+  };
+
+  const handleDuplicateWorkflow = async () => {
+    if (!workflow) return;
+    const name = prompt("Enter name for duplicate:", (workflow.workflow.name || "workflow") + "-copy");
+    if (!name) return;
+    
+    const dir = settings.workflowDirs[0] || "/Volumes/JS-DEV/lobster-ui/workflows";
+    const path = await createWorkflow(name, dir);
+    if (path) {
+      updateWorkflow(path, JSON.parse(JSON.stringify(workflow.workflow)));
       selectWorkflow(path);
     }
   };
@@ -318,6 +363,54 @@ export default function Home() {
       }
     };
     input.click();
+  };
+
+  const handleShare = async () => {
+    if (!workflow) return;
+    try {
+      const encoded = btoa(encodeURIComponent(JSON.stringify(workflow.workflow)));
+      const shareUrl = `${window.location.origin}?workflow=${encoded.slice(0, 100)}...`;
+      await navigator.clipboard.writeText(window.location.href.split('?')[0] + '?w=' + encoded);
+      setCopiedUrl(true);
+      setTimeout(() => setCopiedUrl(false), 2000);
+    } catch (error) {
+      console.error("Share failed:", error);
+    }
+  };
+
+  const handleImportUrl = async () => {
+    const url = prompt("Enter workflow URL (YAML or JSON):");
+    if (!url) return;
+    
+    try {
+      const response = await fetch(url);
+      const content = await response.text();
+      const format = url.endsWith(".json") ? "json" : "yaml";
+      
+      const importRes = await fetch("/api/workflows/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content, format }),
+      });
+      const data = await importRes.json();
+      
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
+      
+      const dir = settings.workflowDirs[0] || "/Volumes/JS-DEV/lobster-ui/workflows";
+      const path = await createWorkflow(data.workflow.name || "imported", dir);
+      
+      if (path) {
+        const { updateWorkflow } = useWorkflowStore.getState();
+        updateWorkflow(path, data.workflow);
+        selectWorkflow(path);
+      }
+    } catch (error) {
+      console.error("Import from URL failed:", error);
+      alert("Failed to import from URL");
+    }
   };
 
   useEffect(() => {
@@ -400,6 +493,14 @@ export default function Home() {
         <Button 
           variant="ghost" 
           size="icon" 
+          onClick={() => setShowSidebar(!showSidebar)}
+          title={showSidebar ? "Hide Sidebar" : "Show Sidebar"}
+        >
+          {showSidebar ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+        </Button>
+        <Button 
+          variant="ghost" 
+          size="icon" 
           onClick={doLoadWorkflows}
           title="Refresh"
         >
@@ -439,6 +540,24 @@ export default function Home() {
         >
           <Redo2 className="h-4 w-4" />
         </Button>
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          onClick={() => setShowShare(true)}
+          disabled={!workflow}
+          title="Share Workflow"
+        >
+          <Share2 className="h-4 w-4" />
+        </Button>
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          onClick={() => setShowHistory(true)}
+          disabled={!workflow}
+          title="Version History"
+        >
+          <History className="h-4 w-4" />
+        </Button>
         {envWarnings.length > 0 && (
           <div className="relative" title={`${envWarnings.length} env warnings`}>
             <AlertTriangle className="h-4 w-4 text-amber-500" />
@@ -467,17 +586,25 @@ export default function Home() {
       {/* Main content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Sidebar */}
+        {showSidebar && (
         <aside className="w-64 border-r bg-background flex flex-col shrink-0">
-          <div className="p-2 border-b">
+          <div className="p-2 border-b space-y-2">
             <Button variant="outline" size="sm" className="w-full justify-start" onClick={handleNewWorkflow}>
               <Plus className="h-4 w-4 mr-2" />
               New Workflow
             </Button>
+            {workflow && (
+              <Button variant="outline" size="sm" className="w-full justify-start" onClick={handleDuplicateWorkflow}>
+                <CopyWorkflow className="h-4 w-4 mr-2" />
+                Duplicate
+              </Button>
+            )}
           </div>
           <div className="flex-1 overflow-auto">
             <WorkflowList />
           </div>
         </aside>
+        )}
 
         {/* Canvas */}
         <main className="flex-1 bg-muted/20 relative">
@@ -543,6 +670,14 @@ export default function Home() {
                 <span className="text-muted-foreground">Deselect</span>
                 <kbd className="px-2 py-0.5 bg-muted rounded text-xs">Esc</kbd>
               </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Duplicate step</span>
+                <kbd className="px-2 py-0.5 bg-muted rounded text-xs">D</kbd>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Delete step</span>
+                <kbd className="px-2 py-0.5 bg-muted rounded text-xs">Del</kbd>
+              </div>
             </div>
           </div>
         </div>
@@ -588,6 +723,71 @@ export default function Home() {
                   <div className="text-xs text-muted-foreground">{t.desc}</div>
                 </button>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Share Modal */}
+      {showShare && workflow && (
+        <div className="fixed inset-0 bg-background/80 flex items-center justify-center z-50" onClick={() => setShowShare(false)}>
+          <div className="bg-background border rounded-lg shadow-lg p-6 w-96" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold">Share Workflow</h2>
+              <Button variant="ghost" size="sm" onClick={() => setShowShare(false)}>×</Button>
+            </div>
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">Copy this link to share your workflow:</p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={window.location.href.split('?')[0] + '?w=' + btoa(JSON.stringify(workflow.workflow)).slice(0, 50) + '...'}
+                  className="flex-1 px-3 py-2 text-sm rounded-md border bg-muted"
+                />
+                <Button variant="outline" size="sm" onClick={handleShare}>
+                  {copiedUrl ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                </Button>
+              </div>
+              <Button variant="outline" className="w-full" onClick={handleImportUrl}>
+                Import from URL
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Version History Modal */}
+      {showHistory && workflow && (
+        <div className="fixed inset-0 bg-background/80 flex items-center justify-center z-50" onClick={() => setShowHistory(false)}>
+          <div className="bg-background border rounded-lg shadow-lg p-6 w-[500px] max-h-[80vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold">Version History</h2>
+              <Button variant="ghost" size="sm" onClick={() => setShowHistory(false)}>×</Button>
+            </div>
+            <div className="space-y-2">
+              {(() => {
+                const versions = useWorkflowStore.getState().getVersions(workflow.path);
+                if (versions.length === 0) {
+                  return <p className="text-sm text-muted-foreground text-center py-4">No version history yet</p>;
+                }
+                return versions.map((v, i) => (
+                  <div key={i} className="p-3 border rounded-lg flex items-center justify-between">
+                    <div>
+                      <div className="text-sm font-medium">{v.workflow.name || 'Untitled'}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {new Date(v.timestamp).toLocaleString()} - {v.workflow.steps.length} steps
+                      </div>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => {
+                      useWorkflowStore.getState().restoreVersion(workflow.path, v);
+                      setShowHistory(false);
+                    }}>
+                      Restore
+                    </Button>
+                  </div>
+                ));
+              })()}
             </div>
           </div>
         </div>

@@ -1,6 +1,12 @@
 import { create } from "zustand";
 import { type LobsterWorkflow, type WorkflowFile, type WorkflowLayout, type AppSettings, type EnvFile } from "./schema";
 
+interface WorkflowVersion {
+  path: string;
+  workflow: LobsterWorkflow;
+  timestamp: number;
+}
+
 interface WorkflowState {
   workflows: WorkflowFile[];
   selectedWorkflowId: string | null;
@@ -15,6 +21,7 @@ interface WorkflowState {
   selectedWorkflowPath: string | null;
   envFiles: EnvFile[];
   envWarnings: string[];
+  versionHistory: Record<string, WorkflowVersion[]>;
 
   loadWorkflows: (dirs: string[]) => Promise<void>;
   loadEnvFiles: (dirs: string[]) => Promise<void>;
@@ -39,6 +46,10 @@ interface WorkflowState {
   canRedo: () => boolean;
   toggleFavorite: (path: string) => void;
   addRecent: (path: string) => void;
+  saveVersion: (path: string) => void;
+  getVersions: (path: string) => WorkflowVersion[];
+  restoreVersion: (path: string, version: WorkflowVersion) => void;
+  getStepError: (stepId: string) => string | undefined;
 }
 
 async function fetchWorkflowsFromAPI(dirs: string[]): Promise<WorkflowFile[]> {
@@ -126,6 +137,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   selectedWorkflowPath: null,
   envFiles: [],
   envWarnings: [],
+  versionHistory: {},
 
   loadWorkflows: async (dirs: string[]) => {
     const allWorkflows = await fetchWorkflowsFromAPI(dirs);
@@ -294,6 +306,15 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       history: newHistory 
     });
     get().validateWorkflow(workflow);
+    
+    // Auto-save version on changes (limit frequency)
+    if (selectedWorkflowId === path && addToHistory) {
+      const versions = get().versionHistory[path] || [];
+      const lastVersion = versions[0];
+      if (!lastVersion || Date.now() - lastVersion.timestamp > 30000) {
+        get().saveVersion(path);
+      }
+    }
   },
 
   saveWorkflow: async (path: string) => {
@@ -611,5 +632,54 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     const filtered = recent.filter(r => r !== path);
     const newRecent = [path, ...filtered].slice(0, 10);
     set({ settings: { ...settings, recent: newRecent } });
+  },
+
+  saveVersion: (path: string) => {
+    const { workflows, versionHistory } = get();
+    const wf = workflows.find(w => w.path === path);
+    if (!wf) return;
+    
+    const versions = versionHistory[path] || [];
+    const newVersion: WorkflowVersion = {
+      path,
+      workflow: JSON.parse(JSON.stringify(wf.workflow)),
+      timestamp: Date.now(),
+    };
+    
+    // Keep only last 20 versions per workflow
+    const updatedVersions = [newVersion, ...versions].slice(0, 20);
+    set({ versionHistory: { ...versionHistory, [path]: updatedVersions } });
+    
+    // Persist to localStorage
+    try {
+      localStorage.setItem("lobster-version-history", JSON.stringify({ ...versionHistory, [path]: updatedVersions }));
+    } catch (e) {
+      console.warn("Failed to save version to localStorage:", e);
+    }
+  },
+
+  getVersions: (path: string): WorkflowVersion[] => {
+    const { versionHistory } = get();
+    // Try to load from localStorage if not in memory
+    if (!versionHistory[path]) {
+      try {
+        const stored = localStorage.getItem("lobster-version-history");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed[path]) {
+            set({ versionHistory: { ...get().versionHistory, [path]: parsed[path] } });
+            return parsed[path];
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to load versions from localStorage:", e);
+      }
+    }
+    return versionHistory[path] || [];
+  },
+
+  restoreVersion: (path: string, version: WorkflowVersion) => {
+    const { updateWorkflow } = get();
+    updateWorkflow(path, version.workflow);
   },
 }));

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   ReactFlow,
   Background,
@@ -17,6 +17,7 @@ import "@xyflow/react/dist/style.css";
 import { StepNode } from "./nodes/StepNode";
 import { MetadataNode } from "./nodes/MetadataNode";
 import { Button } from "@/components/ui/button";
+import { LayoutGrid, Maximize2 } from "lucide-react";
 
 const nodeTypes: NodeTypes = {
   stepNode: StepNode as unknown as NodeTypes[string],
@@ -38,26 +39,34 @@ export function WorkflowCanvas({
   onSave,
   isDirty,
 }: WorkflowCanvasProps) {
-  const { fitView } = useReactFlow();
-
-  const onNodeClickHandler = useCallback(
-    (_: React.MouseEvent, node: Node) => {
-      onNodeClick?.(node.id);
-    },
-    [onNodeClick]
-  );
-
-  const defaultEdgeOptions = useMemo(
-    () => ({
-      type: "smoothstep" as const,
-      style: { stroke: "#64748b", strokeWidth: 2 },
-    }),
-    []
-  );
+  const { fitView, getNodes } = useReactFlow();
+  const [layoutLoading, setLayoutLoading] = useState(false);
 
   const handleFitView = useCallback(() => {
     fitView({ padding: 0.2 });
   }, [fitView]);
+
+  const handleAutoLayout = useCallback(() => {
+    setLayoutLoading(true);
+    const currentNodes = getNodes();
+    const nodeHeight = 120;
+    const nodeWidth = 300;
+    const gapY = 80;
+    const gapX = 50;
+    
+    const layoutNodes = currentNodes.map((node, index) => ({
+      ...node,
+      position: {
+        x: (index % 2) * (nodeWidth + gapX),
+        y: Math.floor(index / 2) * (nodeHeight + gapY),
+      },
+    }));
+    
+    setTimeout(() => {
+      fitView({ nodes: layoutNodes, padding: 0.2 });
+      setLayoutLoading(false);
+    }, 100);
+  }, [getNodes, fitView]);
 
   return (
     <div className="w-full h-full">
@@ -89,7 +98,12 @@ export function WorkflowCanvas({
           maskColor="rgba(0, 0, 0, 0.1)"
         />
         <Panel position="top-right" className="flex gap-2">
+          <Button onClick={handleAutoLayout} variant="outline" size="sm" disabled={layoutLoading}>
+            <LayoutGrid className="h-4 w-4 mr-1" />
+            {layoutLoading ? "Layout..." : "Auto Layout"}
+          </Button>
           <Button onClick={handleFitView} variant="outline" size="sm">
+            <Maximize2 className="h-4 w-4 mr-1" />
             Fit View
           </Button>
           {onSave && (

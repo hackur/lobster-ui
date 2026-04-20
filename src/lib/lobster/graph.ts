@@ -110,6 +110,8 @@ export function workflowsToGraph(
         for_each: step.for_each,
         workflow: step.workflow,
         workflow_args: step.workflow_args,
+        enabled: step.enabled,
+        comment: step.comment,
       },
     });
 

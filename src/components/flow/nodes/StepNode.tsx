@@ -23,6 +23,7 @@ interface StepNodeData {
   workflow_args?: Record<string, unknown>;
   enabled?: boolean;
   comment?: string;
+  error?: string;
 }
 
 export function StepNode({ data, selected }: NodeProps) {
@@ -46,6 +47,7 @@ export function StepNode({ data, selected }: NodeProps) {
   const hasEnv = !!stepData?.env && Object.keys(stepData.env).length > 0;
   const isEnabled = stepData?.enabled !== false;
   const comment = stepData?.comment;
+  const error = stepData?.error;
 
   const getBorderColor = () => {
     if (hasApproval) return "border-amber-500";
@@ -134,6 +136,11 @@ export function StepNode({ data, selected }: NodeProps) {
             {hasTimeout && (
               <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-orange-500/20 text-orange-600">
                 timeout
+              </span>
+            )}
+            {error && (
+              <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-destructive/20 text-destructive">
+                error
               </span>
             )}
           </div>

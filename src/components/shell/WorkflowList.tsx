@@ -1,21 +1,37 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useWorkflowStore } from "@/lib/lobster/store";
 import { cn } from "@/lib/utils";
-import { FileText, FolderOpen, Search, Star, Clock, StarOff } from "lucide-react";
+import { FileText, FolderOpen, Search, Star, Clock, FolderSearch } from "lucide-react";
 
 export function WorkflowList() {
   const { workflows, selectedWorkflowId, selectWorkflow, dirtyWorkflows, settings, toggleFavorite, addRecent } = useWorkflowStore();
   const [search, setSearch] = useState("");
-  const [activeTab, setActiveTab] = useState<"all" | "favorites" | "recent">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "favorites" | "recent" | "search">("all");
 
   const favoriteWorkflows = workflows.filter(w => settings.favorites?.includes(w.path));
   const recentWorkflows = workflows.filter(w => settings.recent?.includes(w.path));
 
+  const searchResults = useMemo(() => {
+    if (!search || search.length < 2) return [];
+    const query = search.toLowerCase();
+    return workflows.filter(wf => 
+      wf.workflow.name?.toLowerCase().includes(query) ||
+      wf.path.toLowerCase().includes(query) ||
+      wf.workflow.steps.some(s => 
+        s.id.toLowerCase().includes(query) ||
+        s.run?.toLowerCase().includes(query) ||
+        s.pipeline?.toLowerCase().includes(query) ||
+        s.command?.toLowerCase().includes(query)
+      )
+    );
+  }, [workflows, search]);
+
   const getFilteredWorkflows = () => {
     if (activeTab === "favorites") return favoriteWorkflows;
     if (activeTab === "recent") return recentWorkflows;
+    if (activeTab === "search") return searchResults;
     return workflows;
   };
 
@@ -48,9 +64,9 @@ export function WorkflowList() {
   return (
     <div className="p-2 space-y-2">
       {/* Tabs */}
-      <div className="flex gap-1 border-b pb-2">
+      <div className="flex gap-1 border-b pb-2 flex-wrap">
         <button
-          onClick={() => setActiveTab("all")}
+          onClick={() => { setActiveTab("all"); setSearch(""); }}
           className={cn("text-xs px-2 py-1 rounded", activeTab === "all" ? "bg-muted font-medium" : "text-muted-foreground")}
         >
           All
@@ -66,6 +82,12 @@ export function WorkflowList() {
           className={cn("text-xs px-2 py-1 rounded flex items-center gap-1", activeTab === "recent" ? "bg-muted font-medium" : "text-muted-foreground")}
         >
           <Clock className="h-3 w-3" /> {recentWorkflows.length}
+        </button>
+        <button
+          onClick={() => setActiveTab("search")}
+          className={cn("text-xs px-2 py-1 rounded flex items-center gap-1", activeTab === "search" ? "bg-muted font-medium" : "text-muted-foreground")}
+        >
+          <FolderSearch className="h-3 w-3" /> Search
         </button>
       </div>
 

@@ -367,6 +367,42 @@ export function InspectorPanel() {
           </div>
         </div>
 
+        {/* Run Preview */}
+        <div className="space-y-3 border-b pb-4">
+          <h4 className="text-sm font-medium">Execution Preview</h4>
+          <div className="text-xs text-muted-foreground mb-2">Steps will execute in this order:</div>
+          <div className="space-y-1 max-h-48 overflow-auto">
+            {workflow.workflow.steps.map((s, idx) => (
+              <div
+                key={s.id}
+                className={`p-2 text-sm rounded flex items-center gap-2 ${
+                  s.enabled === false ? "opacity-50 bg-muted/30" : "bg-muted/50"
+                }`}
+              >
+                <span className="text-muted-foreground w-5">{idx + 1}.</span>
+                <span className="font-mono truncate flex-1">{s.id}</span>
+                {s.parallel && (
+                  <span className="text-[10px] px-1 py-0.5 rounded bg-indigo-500/20 text-indigo-600">parallel</span>
+                )}
+                {s.for_each && (
+                  <span className="text-[10px] px-1 py-0.5 rounded bg-teal-500/20 text-teal-600">loop</span>
+                )}
+                {s.approval && (
+                  <span className="text-[10px] px-1 py-0.5 rounded bg-amber-500/20 text-amber-600">⏳</span>
+                )}
+                {s.enabled === false && (
+                  <span className="text-[10px] px-1 py-0.5 rounded bg-muted text-muted-foreground">disabled</span>
+                )}
+              </div>
+            ))}
+          </div>
+          {workflow.workflow.steps.some(s => s.enabled === false) && (
+            <p className="text-xs text-amber-600">
+              ⚠️ {workflow.workflow.steps.filter(s => s.enabled === false).length} step(s) disabled
+            </p>
+          )}
+        </div>
+
         {/* Steps List */}
         <div>
           <h4 className="text-sm font-medium mb-2">Steps</h4>
@@ -574,9 +610,21 @@ export function InspectorPanel() {
 
         {/* Command / Run */}
         <div>
-          <label className="text-xs font-medium block mb-1">
-            {step.pipeline ? "Pipeline Command" : "Run Command"}
-          </label>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-xs font-medium">
+              {step.pipeline ? "Pipeline Command" : "Run Command"}
+            </label>
+            <button
+              type="button"
+              onClick={() => {
+                const cmd = step.run || step.command || step.pipeline || "";
+                navigator.clipboard.writeText(cmd);
+              }}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              Copy
+            </button>
+          </div>
           <textarea
             value={step.run || step.command || step.pipeline || ""}
             onChange={(e) => {
