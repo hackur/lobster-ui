@@ -154,6 +154,9 @@ export interface AppSettings {
   workflowDirs: string[];
   uiTheme: "light" | "dark" | "system";
   envFiles: string[];
+  favorites: string[];
+  recent: string[];
+  autoSave: boolean;
 }
 
 export function getStepCommand(step: LobsterStep): string {
