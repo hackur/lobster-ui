@@ -9,13 +9,14 @@ import { WorkflowList } from "@/components/shell/WorkflowList";
 import { InspectorPanel } from "@/components/shell/InspectorPanel";
 import { SourceEditor } from "@/components/shell/SourceEditor";
 import { Button } from "@/components/ui/button";
-import { Settings, RefreshCw, Plus, PanelRightClose, PanelRightOpen, Menu, Code, Layout, Download, Upload } from "lucide-react";
+import { Settings, RefreshCw, Plus, PanelRightClose, PanelRightOpen, Menu, Code, Layout, Download, Upload, Sun, Moon } from "lucide-react";
+import { useTheme } from "@/components/theme-provider";
 
 export default function Home() {
   const {
     workflows,
     selectedWorkflowId,
-    isDirty,
+    dirtyWorkflows,
     layouts,
     loadWorkflows,
     selectWorkflow,
@@ -30,6 +31,7 @@ export default function Home() {
     redo,
   } = useWorkflowStore();
 
+  const { theme, setTheme } = useTheme();
   const [showInspector, setShowInspector] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -252,6 +254,14 @@ export default function Home() {
         <Button variant="ghost" size="icon" onClick={handleImport} title="Import">
           <Upload className="h-4 w-4" />
         </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          title={theme === "dark" ? "Light mode" : "Dark mode"}
+        >
+          {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+        </Button>
         <Button variant="ghost" size="icon" onClick={handleConfigs} title="Settings">
           <Settings className="h-4 w-4" />
         </Button>
@@ -298,7 +308,7 @@ export default function Home() {
                   edges={graph.edges}
                   onNodeClick={handleNodeClick}
                   onSave={handleSave}
-                  isDirty={isDirty}
+                  isDirty={selectedWorkflowId ? !!dirtyWorkflows[selectedWorkflowId] : false}
                 />
               </ReactFlowProvider>
             ) : (

@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { FileText, FolderOpen, Search } from "lucide-react";
 
 export function WorkflowList() {
-  const { workflows, selectedWorkflowId, selectWorkflow } = useWorkflowStore();
+  const { workflows, selectedWorkflowId, selectWorkflow, dirtyWorkflows } = useWorkflowStore();
   const [search, setSearch] = useState("");
 
   const filteredWorkflows = workflows.filter(
@@ -72,7 +72,10 @@ export function WorkflowList() {
                   )}
                 >
                   <FileText className="h-4 w-4 shrink-0" />
-                  <span className="truncate">{wf.workflow.name || wf.path.split("/").pop()}</span>
+                  <span className="truncate flex-1">{wf.workflow.name || wf.path.split("/").pop()}</span>
+                  {dirtyWorkflows[wf.path] && (
+                    <div className="h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0" />
+                  )}
                 </button>
               ))}
             </div>

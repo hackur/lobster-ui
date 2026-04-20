@@ -166,14 +166,34 @@ export function InspectorPanel() {
     <div className="p-4 space-y-4 overflow-auto max-h-full">
       <div className="flex items-center justify-between">
         <h3 className="font-medium">Step: {step.id}</h3>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => handleDeleteStep(step.id)}
-          className="text-destructive hover:text-destructive"
-        >
-          Delete
-        </Button>
+        <div className="flex gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              const newId = `${step.id}_copy`;
+              const newStep = { ...step, id: newId };
+              // Clear unique fields
+              delete (newStep as Record<string, unknown>).approval;
+              delete (newStep as Record<string, unknown>).input;
+              delete (newStep as Record<string, unknown>).parallel;
+              delete (newStep as Record<string, unknown>).for_each;
+              delete (newStep as Record<string, unknown>).workflow;
+              const newSteps = [...workflow.workflow.steps, newStep as LobsterStep];
+              updateWorkflow(workflow.path, { ...workflow.workflow, steps: newSteps });
+            }}
+          >
+            Duplicate
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => handleDeleteStep(step.id)}
+            className="text-destructive hover:text-destructive"
+          >
+            Delete
+          </Button>
+        </div>
       </div>
 
       <div className="space-y-3">

@@ -7,8 +7,9 @@ interface WorkflowState {
   selectedNodeId: string | null;
   layouts: Record<string, WorkflowLayout>;
   settings: AppSettings;
-  isDirty: boolean;
+  dirtyWorkflows: Record<string, boolean>;
   validationErrors: string[];
+  nodeErrors: Record<string, string[]>;
   viewMode: "canvas" | "source";
   history: { past: LobsterWorkflow[]; future: LobsterWorkflow[] };
   selectedWorkflowPath: string | null;
@@ -106,15 +107,16 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     workflowDirs: [],
     uiTheme: "system",
   },
-  isDirty: false,
+  dirtyWorkflows: {},
   validationErrors: [],
+  nodeErrors: {},
   viewMode: "canvas",
   history: { past: [], future: [] },
   selectedWorkflowPath: null,
 
   loadWorkflows: async (dirs: string[]) => {
     const allWorkflows = await fetchWorkflowsFromAPI(dirs);
-    set({ workflows: allWorkflows, isDirty: false });
+    set({ workflows: allWorkflows, dirtyWorkflows: {} });
   },
 
   selectWorkflow: async (path: string | null) => {
@@ -157,7 +159,12 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     const updated = workflows.map((w) =>
       w.path === path ? { ...w, workflow } : w
     );
-    set({ workflows: updated, isDirty: true, history: newHistory });
+    const { dirtyWorkflows } = get();
+    set({ 
+      workflows: updated, 
+      dirtyWorkflows: { ...dirtyWorkflows, [path]: true }, 
+      history: newHistory 
+    });
     get().validateWorkflow(workflow);
   },
 
@@ -168,7 +175,10 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
     const success = await saveWorkflowToAPI(path, workflowFile.workflow, workflowFile.format);
     if (success) {
-      set({ isDirty: false });
+      const { dirtyWorkflows } = get();
+      const updatedDirty = { ...dirtyWorkflows };
+      delete updatedDirty[path];
+      set({ dirtyWorkflows: updatedDirty });
     }
   },
 
@@ -201,7 +211,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       workflows: workflows.map((w) =>
         w.path === workflowPath ? { ...w, workflow: updatedWorkflow } : w
       ),
-      isDirty: true,
+      dirtyWorkflows: { ...get().dirtyWorkflows, [workflowPath]: true },
     });
   },
 
@@ -218,12 +228,19 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       workflows: workflows.map((w) =>
         w.path === workflowPath ? { ...w, workflow: updatedWorkflow } : w
       ),
-      isDirty: true,
+      dirtyWorkflows: { ...get().dirtyWorkflows, [workflowPath]: true },
     });
   },
 
   validateWorkflow: (workflow: LobsterWorkflow) => {
     const errors: string[] = [];
+    const nodeErrors: Record<string, string[]> = {};
+
+    const addNodeError = (nodeId: string, error: string) => {
+      if (!nodeErrors[nodeId]) nodeErrors[nodeId] = [];
+      nodeErrors[nodeId].push(error);
+      errors.push(error);
+    };
 
     if (!workflow.name) {
       errors.push("Workflow should have a name");
@@ -235,7 +252,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     const stepIds = new Set<string>();
     for (const step of workflow.steps) {
       if (stepIds.has(step.id)) {
-        errors.push(`Duplicate step id: ${step.id}`);
+        addNodeError(step.id, `Duplicate step id: ${step.id}`);
       }
       stepIds.add(step.id);
 
@@ -249,19 +266,19 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       const hasInput = step.input;
 
       if (!hasRun && !hasPipeline && !hasWorkflow && !hasParallel && !hasForEach && !hasApproval && !hasInput) {
-        errors.push(`Step ${step.id} must have run, pipeline, workflow, parallel, for_each, approval, or input`);
+        addNodeError(step.id, "Step must have run, pipeline, workflow, parallel, for_each, approval, or input");
       }
 
       // Validate parallel branches
       if (step.parallel) {
         const branches = step.parallel.branches || [];
         if (branches.length === 0) {
-          errors.push(`Step ${step.id} parallel requires at least one branch`);
+          addNodeError(step.id, "Parallel requires at least one branch");
         }
         const branchIds = new Set<string>();
         for (const branch of branches) {
           if (branchIds.has(branch.id)) {
-            errors.push(`Step ${step.id} has duplicate parallel branch id: ${branch.id}`);
+            addNodeError(step.id, `Duplicate parallel branch id: ${branch.id}`);
           }
           branchIds.add(branch.id);
         }
@@ -269,22 +286,22 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
       // Validate for_each has inner steps
       if (step.for_each && (!step.steps || step.steps.length === 0)) {
-        errors.push(`Step ${step.id} for_each requires inner steps`);
+        addNodeError(step.id, "for_each requires inner steps");
       }
 
       // Validate input has prompt and responseSchema
       if (step.input) {
         if (!step.input.prompt) {
-          errors.push(`Step ${step.id} input requires a prompt`);
+          addNodeError(step.id, "input requires a prompt");
         }
         if (!step.input.responseSchema) {
-          errors.push(`Step ${step.id} input requires responseSchema`);
+          addNodeError(step.id, "input requires responseSchema");
         }
       }
 
       // Validate workflow_args is object if present
       if (step.workflow_args && (typeof step.workflow_args !== 'object' || Array.isArray(step.workflow_args))) {
-        errors.push(`Step ${step.id} workflow_args must be an object`);
+        addNodeError(step.id, "workflow_args must be an object");
       }
     }
 
@@ -294,7 +311,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         if (match) {
           const refStepId = match[1];
           if (!stepIds.has(refStepId)) {
-            errors.push(`Step ${step.id} references unknown step: ${refStepId}`);
+            addNodeError(step.id, `References unknown step: ${refStepId}`);
           }
         }
       }
@@ -306,7 +323,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
           for (const ref of refs) {
             const match = ref.match(/\$(\w+)/);
             if (match && !stepIds.has(match[1])) {
-              errors.push(`Step ${step.id} condition references unknown step: ${match[1]}`);
+              addNodeError(step.id, `Condition references unknown step: ${match[1]}`);
             }
           }
         }
@@ -319,14 +336,14 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
           for (const ref of refs) {
             const match = ref.match(/\$(\w+)/);
             if (match && !stepIds.has(match[1])) {
-              errors.push(`Step ${step.id} when references unknown step: ${match[1]}`);
+              addNodeError(step.id, `when references unknown step: ${match[1]}`);
             }
           }
         }
       }
     }
 
-    set({ validationErrors: errors });
+    set({ validationErrors: errors, nodeErrors });
     return errors;
   },
 
@@ -395,8 +412,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       rawContent,
       workflow: updatedWorkflow,
     };
-
-    set({ workflows: updatedWorkflows, isDirty: true });
+    const { dirtyWorkflows } = get();
+    set({ workflows: updatedWorkflows, dirtyWorkflows: { ...dirtyWorkflows, [path]: true } });
   },
 
   undo: () => {
@@ -419,7 +436,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         past: newPast,
         future: [current, ...history.future],
       },
-      isDirty: true,
+      dirtyWorkflows: { ...get().dirtyWorkflows, [selectedWorkflowId]: true },
     });
   },
 
@@ -443,7 +460,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         past: [...history.past, current],
         future: newFuture,
       },
-      isDirty: true,
+      dirtyWorkflows: { ...get().dirtyWorkflows, [selectedWorkflowId]: true },
     });
   },
 
