@@ -90,6 +90,8 @@ export const LobsterStepSchema = z.object({
   timeout_ms: z.number().optional(),
   on_error: z.enum(["stop", "continue", "skip_rest"]).optional(),
   retry: LobsterRetrySchema.optional(),
+  enabled: z.boolean().optional(),
+  comment: z.string().optional(),
 });
 
 export type LobsterStep = z.infer<typeof LobsterStepSchema>;

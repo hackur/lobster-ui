@@ -56,17 +56,152 @@ export function InspectorPanel() {
   const step = workflow.workflow.steps.find((s) => s.id === selectedNodeId);
 
   if (!selectedNodeId || !step) {
+    const updateWorkflowMeta = (field: string, value: unknown) => {
+      updateWorkflow(workflow.path, { ...workflow.workflow, [field]: value });
+    };
+
     return (
-      <div className="p-4 space-y-4 overflow-auto max-h-full">
-        {/* Workflow Info */}
-        <div>
-          <h3 className="font-medium mb-2">{workflow.workflow.name}</h3>
-          <div className="text-sm text-muted-foreground">
-            {workflow.workflow.steps.length} step(s)
+      <div className="p-4 space-y-6 overflow-auto max-h-full">
+        {/* Workflow Metadata */}
+        <div className="space-y-3 border-b pb-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-medium">Workflow Settings</h3>
           </div>
-          {workflow.workflow.args && Object.keys(workflow.workflow.args).length > 0 && (
-            <div className="text-xs text-muted-foreground mt-1">
-              {Object.keys(workflow.workflow.args).length} arg(s)
+          
+          <div>
+            <label className="text-xs font-medium block mb-1">Name</label>
+            <input
+              type="text"
+              value={workflow.workflow.name || ""}
+              onChange={(e) => updateWorkflowMeta("name", e.target.value)}
+              className="w-full px-2 py-1.5 text-sm rounded-md border bg-background"
+              placeholder="My Workflow"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-medium block mb-1">Description</label>
+            <textarea
+              value={workflow.workflow.description || ""}
+              onChange={(e) => updateWorkflowMeta("description", e.target.value)}
+              rows={2}
+              className="w-full px-2 py-1.5 text-sm rounded-md border bg-background resize-none"
+              placeholder="What does this workflow do?"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-medium block mb-1">Working Directory</label>
+            <input
+              type="text"
+              value={workflow.workflow.cwd || ""}
+              onChange={(e) => updateWorkflowMeta("cwd", e.target.value)}
+              className="w-full px-2 py-1.5 text-sm rounded-md border bg-background font-mono"
+              placeholder="/path/to/dir"
+            />
+          </div>
+        </div>
+
+        {/* Cost Limit */}
+        <div className="space-y-3 border-b pb-4">
+          <h4 className="text-sm font-medium">Cost Limit</h4>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs font-medium block mb-1">Max USD</label>
+              <input
+                type="number"
+                value={workflow.workflow.cost_limit?.max_usd || ""}
+                onChange={(e) => updateWorkflowMeta("cost_limit", { 
+                  max_usd: parseFloat(e.target.value) || 0,
+                  action: workflow.workflow.cost_limit?.action 
+                })}
+                className="w-full px-2 py-1.5 text-sm rounded-md border bg-background"
+                placeholder="10.00"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium block mb-1">Action</label>
+              <select
+                value={workflow.workflow.cost_limit?.action || "warn"}
+                onChange={(e) => updateWorkflowMeta("cost_limit", { 
+                  max_usd: workflow.workflow.cost_limit?.max_usd || 10,
+                  action: e.target.value
+                })}
+                className="w-full px-2 py-1.5 text-sm rounded-md border bg-background"
+              >
+                <option value="warn">Warn</option>
+                <option value="stop">Stop</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Workflow Args */}
+        <div className="space-y-3 border-b pb-4">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-medium">Arguments</h4>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 text-xs"
+              onClick={() => {
+                const currentArgs = workflow.workflow.args || {};
+                const newArgName = `arg${Object.keys(currentArgs).length + 1}`;
+                updateWorkflowMeta("args", { ...currentArgs, [newArgName]: { description: "", default: "" } });
+              }}
+            >
+              + Add
+            </Button>
+          </div>
+          {Object.entries(workflow.workflow.args || {}).map(([argName, argDef]) => (
+            <div key={argName} className="p-2 rounded-md bg-muted/50 space-y-2">
+              <div className="flex items-center justify-between">
+                <input
+                  type="text"
+                  value={argName}
+                  readOnly
+                  className="font-mono text-xs bg-transparent w-24"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-5 text-xs text-destructive"
+                  onClick={() => {
+                    const newArgs = { ...workflow.workflow.args };
+                    delete newArgs[argName];
+                    updateWorkflowMeta("args", newArgs);
+                  }}
+                >
+                  ×
+                </Button>
+              </div>
+              <input
+                type="text"
+                value={argDef.description || ""}
+                onChange={(e) => {
+                  const newArgs = { ...workflow.workflow.args };
+                  newArgs[argName] = { ...newArgs[argName], description: e.target.value };
+                  updateWorkflowMeta("args", newArgs);
+                }}
+                className="w-full px-2 py-1 text-xs rounded border bg-background"
+                placeholder="Description"
+              />
+              <input
+                type="text"
+                value={String(argDef.default ?? "")}
+                onChange={(e) => {
+                  const newArgs = { ...workflow.workflow.args };
+                  newArgs[argName] = { ...newArgs[argName], default: e.target.value };
+                  updateWorkflowMeta("args", newArgs);
+                }}
+                className="w-full px-2 py-1 text-xs rounded border bg-background font-mono"
+                placeholder="Default value"
+              />
+            </div>
+          ))}
+          {(!workflow.workflow.args || Object.keys(workflow.workflow.args).length === 0) && (
+            <div className="text-xs text-muted-foreground text-center py-2">
+              No arguments defined
             </div>
           )}
         </div>
@@ -86,6 +221,37 @@ export function InspectorPanel() {
             </ul>
           </div>
         )}
+
+        {/* Workflow Stats */}
+        <div className="p-3 rounded-md bg-muted/30 space-y-2">
+          <h4 className="text-xs font-medium text-muted-foreground">Workflow Stats</h4>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Steps</span>
+              <span className="font-medium">{workflow.workflow.steps.length}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Enabled</span>
+              <span className="font-medium">{workflow.workflow.steps.filter(s => s.enabled !== false).length}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">LLM Steps</span>
+              <span className="font-medium">{workflow.workflow.steps.filter(s => s.pipeline).length}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Parallel</span>
+              <span className="font-medium">{workflow.workflow.steps.filter(s => s.parallel).length}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Loops</span>
+              <span className="font-medium">{workflow.workflow.steps.filter(s => s.for_each).length}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Sub-workflows</span>
+              <span className="font-medium">{workflow.workflow.steps.filter(s => s.workflow).length}</span>
+            </div>
+          </div>
+        </div>
 
         {/* Steps List */}
         <div>
@@ -197,6 +363,24 @@ export function InspectorPanel() {
       </div>
 
       <div className="space-y-3">
+        {/* Enabled Toggle */}
+        <div className="flex items-center justify-between p-2 rounded-md bg-muted/30">
+          <label className="text-sm">Enabled</label>
+          <button
+            type="button"
+            onClick={() => handleUpdateStep(step.id, "enabled", !(step.enabled ?? true))}
+            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+              step.enabled !== false ? "bg-primary" : "bg-muted"
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                step.enabled !== false ? "translate-x-4" : "translate-x-0.5"
+              }`}
+            />
+          </button>
+        </div>
+
         {/* Step ID */}
         <div>
           <label className="text-xs font-medium block mb-1">Step ID</label>
@@ -450,6 +634,18 @@ export function InspectorPanel() {
             <option value="continue">continue - proceed to next step</option>
             <option value="skip_rest">skip_rest - skip remaining steps</option>
           </select>
+        </div>
+
+        {/* Comment / Notes */}
+        <div>
+          <label className="text-xs font-medium block mb-1">Comment / Notes</label>
+          <textarea
+            value={step.comment || ""}
+            onChange={(e) => handleUpdateStep(step.id, "comment", e.target.value || undefined)}
+            rows={2}
+            className="w-full px-2 py-1.5 text-sm rounded-md border bg-background resize-none"
+            placeholder="Add notes about this step..."
+          />
         </div>
 
         {/* Parallel Editor */}

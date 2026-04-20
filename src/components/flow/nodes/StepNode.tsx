@@ -21,6 +21,8 @@ interface StepNodeData {
   for_each?: string;
   workflow?: string;
   workflow_args?: Record<string, unknown>;
+  enabled?: boolean;
+  comment?: string;
 }
 
 export function StepNode({ data, selected }: NodeProps) {
@@ -42,6 +44,8 @@ export function StepNode({ data, selected }: NodeProps) {
   const hasRetry = !!stepData?.retry?.max;
   const hasTimeout = !!stepData?.timeout_ms;
   const hasEnv = !!stepData?.env && Object.keys(stepData.env).length > 0;
+  const isEnabled = stepData?.enabled !== false;
+  const comment = stepData?.comment;
 
   const getBorderColor = () => {
     if (hasApproval) return "border-amber-500";
@@ -60,7 +64,8 @@ export function StepNode({ data, selected }: NodeProps) {
       className={cn(
         "w-[280px] rounded-lg border-2 bg-card text-card-foreground shadow-sm transition-colors",
         selected && "ring-2 ring-ring",
-        borderColor
+        borderColor,
+        !isEnabled && "opacity-50"
       )}
     >
       <Handle
@@ -76,6 +81,16 @@ export function StepNode({ data, selected }: NodeProps) {
             <span className="font-mono text-sm font-medium truncate">{label}</span>
           </div>
           <div className="flex gap-1 flex-wrap justify-end">
+            {!isEnabled && (
+              <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-muted text-muted-foreground">
+                disabled
+              </span>
+            )}
+            {comment && (
+              <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-slate-500/20 text-slate-600">
+                note
+              </span>
+            )}
             {stepType === "pipeline" && (
               <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-violet-500/20 text-violet-600">
                 LLM

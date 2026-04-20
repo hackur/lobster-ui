@@ -9,7 +9,7 @@ import { WorkflowList } from "@/components/shell/WorkflowList";
 import { InspectorPanel } from "@/components/shell/InspectorPanel";
 import { SourceEditor } from "@/components/shell/SourceEditor";
 import { Button } from "@/components/ui/button";
-import { Settings, RefreshCw, Plus, PanelRightClose, PanelRightOpen, Menu, Code, Layout, Download, Upload, Sun, Moon, AlertTriangle } from "lucide-react";
+import { Settings, RefreshCw, Plus, PanelRightClose, PanelRightOpen, Menu, Code, Layout, Download, Upload, Sun, Moon, AlertTriangle, Keyboard } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
 
 export default function Home() {
@@ -35,6 +35,7 @@ export default function Home() {
   const { theme, setTheme } = useTheme();
   const [showInspector, setShowInspector] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
 
   const workflow = workflows.find((w) => w.path === selectedWorkflowId);
   const graph = workflow ? workflowsToGraph(workflow.workflow, layouts[workflow.path]?.nodes) : { nodes: [], edges: [] };
@@ -274,6 +275,14 @@ export default function Home() {
         >
           <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
         </Button>
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          onClick={() => setShowShortcuts(true)}
+          title="Keyboard Shortcuts"
+        >
+          <Keyboard className="h-4 w-4" />
+        </Button>
         {envWarnings.length > 0 && (
           <div className="relative" title={`${envWarnings.length} env warnings`}>
             <AlertTriangle className="h-4 w-4 text-amber-500" />
@@ -339,6 +348,40 @@ export default function Home() {
           </aside>
         )}
       </div>
+
+      {/* Keyboard Shortcuts Modal */}
+      {showShortcuts && (
+        <div className="fixed inset-0 bg-background/80 flex items-center justify-center z-50" onClick={() => setShowShortcuts(false)}>
+          <div className="bg-background border rounded-lg shadow-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold">Keyboard Shortcuts</h2>
+              <Button variant="ghost" size="sm" onClick={() => setShowShortcuts(false)}>×</Button>
+            </div>
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Save workflow</span>
+                <kbd className="px-2 py-0.5 bg-muted rounded text-xs">⌘ S</kbd>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">New workflow</span>
+                <kbd className="px-2 py-0.5 bg-muted rounded text-xs">⌘ N</kbd>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Undo</span>
+                <kbd className="px-2 py-0.5 bg-muted rounded text-xs">⌘ Z</kbd>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Redo</span>
+                <kbd className="px-2 py-0.5 bg-muted rounded text-xs">⌘ ⇧ Z</kbd>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Deselect</span>
+                <kbd className="px-2 py-0.5 bg-muted rounded text-xs">Esc</kbd>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
