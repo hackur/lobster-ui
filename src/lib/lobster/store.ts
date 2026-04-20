@@ -37,6 +37,8 @@ interface WorkflowState {
   redo: () => void;
   canUndo: () => boolean;
   canRedo: () => boolean;
+  toggleFavorite: (path: string) => void;
+  addRecent: (path: string) => void;
 }
 
 async function fetchWorkflowsFromAPI(dirs: string[]): Promise<WorkflowFile[]> {
@@ -112,6 +114,9 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     workflowDirs: [],
     uiTheme: "system",
     envFiles: [],
+    favorites: [],
+    recent: [],
+    autoSave: true,
   },
   dirtyWorkflows: {},
   validationErrors: [],
@@ -589,4 +594,22 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
   canUndo: () => get().history.past.length > 0,
   canRedo: () => get().history.future.length > 0,
+
+  toggleFavorite: (path: string) => {
+    const { settings } = get();
+    const favorites = settings.favorites || [];
+    const isFavorite = favorites.includes(path);
+    const newFavorites = isFavorite
+      ? favorites.filter(f => f !== path)
+      : [...favorites, path];
+    set({ settings: { ...settings, favorites: newFavorites } });
+  },
+
+  addRecent: (path: string) => {
+    const { settings } = get();
+    const recent = settings.recent || [];
+    const filtered = recent.filter(r => r !== path);
+    const newRecent = [path, ...filtered].slice(0, 10);
+    set({ settings: { ...settings, recent: newRecent } });
+  },
 }));

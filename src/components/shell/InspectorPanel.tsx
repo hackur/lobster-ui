@@ -1,14 +1,23 @@
 "use client";
 
+import { useState } from "react";
 import { useWorkflowStore } from "@/lib/lobster/store";
 import { Button } from "@/components/ui/button";
-import { type LobsterStep } from "@/lib/lobster/schema";
+import { type LobsterStep, type LobsterWorkflow } from "@/lib/lobster/schema";
+import { FilePlus, X, AlertTriangle } from "lucide-react";
 
 interface StepTemplate {
   id: string;
   name: string;
   description: string;
   step: Partial<LobsterStep>;
+}
+
+interface WorkflowTemplate {
+  id: string;
+  name: string;
+  description: string;
+  workflow: Partial<LobsterWorkflow>;
 }
 
 const STEP_TEMPLATES: StepTemplate[] = [
@@ -21,6 +30,104 @@ const STEP_TEMPLATES: StepTemplate[] = [
   { id: "workflow", name: "Workflow", description: "Call sub-workflow", step: { workflow: "./sub-workflow.yaml" } },
 ];
 
+const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
+  {
+    id: "basic",
+    name: "Basic Workflow",
+    description: "Simple sequential steps",
+    workflow: {
+      name: "New Workflow",
+      description: "A basic workflow",
+      steps: [
+        { id: "step1", run: "echo 'Hello'" },
+        { id: "step2", run: "echo 'Done'" },
+      ],
+    },
+  },
+  {
+    id: "llm-pipeline",
+    name: "LLM Pipeline",
+    description: "Multi-step LLM processing",
+    workflow: {
+      name: "LLM Pipeline",
+      description: "Process data with LLM",
+      steps: [
+        { id: "extract", pipeline: "llm.invoke --prompt 'Extract key info' $" },
+        { id: "transform", pipeline: "llm.invoke --prompt 'Transform data' $.output" },
+        { id: "save", run: "cat > output.json" },
+      ],
+    },
+  },
+  {
+    id: "approval-gate",
+    name: "Approval Gate",
+    description: "Requires human approval",
+    workflow: {
+      name: "Approval Workflow",
+      description: "Waits for approval before proceeding",
+      steps: [
+        { id: "prepare", run: "echo 'Ready for review'" },
+        { id: "approval", approval: "required" },
+        { id: "execute", run: "echo 'Approved, proceeding'" },
+      ],
+    },
+  },
+  {
+    id: "parallel-processing",
+    name: "Parallel Processing",
+    description: "Run tasks concurrently",
+    workflow: {
+      name: "Parallel Workflow",
+      description: "Process multiple items in parallel",
+      steps: [
+        { id: "split", run: "echo 'items'" },
+        { 
+          id: "process", 
+          parallel: { 
+            branches: [
+              { id: "branch1", run: "echo 'process 1'" },
+              { id: "branch2", run: "echo 'process 2'" },
+              { id: "branch3", run: "echo 'process 3'" },
+            ] 
+          } 
+        },
+        { id: "merge", run: "echo 'All done'" },
+      ],
+    },
+  },
+  {
+    id: "batch-loop",
+    name: "Batch Loop",
+    description: "Process items in a loop",
+    workflow: {
+      name: "Batch Workflow",
+      description: "Process each item",
+      steps: [
+        { id: "fetch", run: "curl -s https://api.example.com/items" },
+        { id: "process", for_each: "$.json", steps: [{ id: "item", run: "echo ${item}" }] },
+      ],
+    },
+  },
+  {
+    id: "error-handling",
+    name: "With Error Handling",
+    description: "Retry and error handling",
+    workflow: {
+      name: "Resilient Workflow",
+      description: "Handles failures gracefully",
+      steps: [
+        { 
+          id: "main", 
+          run: "npm run task",
+          retry: { max: 3, backoff: "exponential", delay_ms: 1000, jitter: true },
+          on_error: "continue",
+        },
+        { id: "fallback", run: "echo 'Using fallback'" },
+      ],
+    },
+  },
+];
+
 export function InspectorPanel() {
   const {
     workflows,
@@ -30,6 +137,8 @@ export function InspectorPanel() {
     deleteStep,
     validationErrors,
   } = useWorkflowStore();
+
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
 
   const workflow = workflows.find((w) => w.path === selectedWorkflowId);
 
@@ -50,7 +159,12 @@ export function InspectorPanel() {
   };
 
   const handleDeleteStep = (stepId: string) => {
+    setShowDeleteConfirm(stepId);
+  };
+
+  const confirmDeleteStep = (stepId: string) => {
     deleteStep(workflow.path, stepId);
+    setShowDeleteConfirm(null);
   };
 
   const step = workflow.workflow.steps.find((s) => s.id === selectedNodeId);
@@ -864,6 +978,29 @@ export function InspectorPanel() {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-background/80 flex items-center justify-center z-50">
+          <div className="bg-background border rounded-lg shadow-lg p-4 w-80">
+            <div className="flex items-center gap-2 mb-3">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              <h3 className="font-medium">Delete Step?</h3>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">
+              Are you sure you want to delete "{showDeleteConfirm}"? This action cannot be undone.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" size="sm" onClick={() => setShowDeleteConfirm(null)}>
+                Cancel
+              </Button>
+              <Button variant="destructive" size="sm" onClick={() => confirmDeleteStep(showDeleteConfirm)}>
+                Delete
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

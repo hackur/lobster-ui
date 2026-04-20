@@ -3,13 +3,23 @@
 import { useState } from "react";
 import { useWorkflowStore } from "@/lib/lobster/store";
 import { cn } from "@/lib/utils";
-import { FileText, FolderOpen, Search } from "lucide-react";
+import { FileText, FolderOpen, Search, Star, Clock, StarOff } from "lucide-react";
 
 export function WorkflowList() {
-  const { workflows, selectedWorkflowId, selectWorkflow, dirtyWorkflows } = useWorkflowStore();
+  const { workflows, selectedWorkflowId, selectWorkflow, dirtyWorkflows, settings, toggleFavorite, addRecent } = useWorkflowStore();
   const [search, setSearch] = useState("");
+  const [activeTab, setActiveTab] = useState<"all" | "favorites" | "recent">("all");
 
-  const filteredWorkflows = workflows.filter(
+  const favoriteWorkflows = workflows.filter(w => settings.favorites?.includes(w.path));
+  const recentWorkflows = workflows.filter(w => settings.recent?.includes(w.path));
+
+  const getFilteredWorkflows = () => {
+    if (activeTab === "favorites") return favoriteWorkflows;
+    if (activeTab === "recent") return recentWorkflows;
+    return workflows;
+  };
+
+  const filteredWorkflows = getFilteredWorkflows().filter(
     (wf) =>
       wf.workflow.name?.toLowerCase().includes(search.toLowerCase()) ||
       wf.path.toLowerCase().includes(search.toLowerCase())
@@ -37,6 +47,28 @@ export function WorkflowList() {
 
   return (
     <div className="p-2 space-y-2">
+      {/* Tabs */}
+      <div className="flex gap-1 border-b pb-2">
+        <button
+          onClick={() => setActiveTab("all")}
+          className={cn("text-xs px-2 py-1 rounded", activeTab === "all" ? "bg-muted font-medium" : "text-muted-foreground")}
+        >
+          All
+        </button>
+        <button
+          onClick={() => setActiveTab("favorites")}
+          className={cn("text-xs px-2 py-1 rounded flex items-center gap-1", activeTab === "favorites" ? "bg-muted font-medium" : "text-muted-foreground")}
+        >
+          <Star className="h-3 w-3" /> {favoriteWorkflows.length}
+        </button>
+        <button
+          onClick={() => setActiveTab("recent")}
+          className={cn("text-xs px-2 py-1 rounded flex items-center gap-1", activeTab === "recent" ? "bg-muted font-medium" : "text-muted-foreground")}
+        >
+          <Clock className="h-3 w-3" /> {recentWorkflows.length}
+        </button>
+      </div>
+
       {/* Search */}
       <div className="relative">
         <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -61,11 +93,14 @@ export function WorkflowList() {
             </div>
             <div className="space-y-0.5">
               {files.map((wf) => (
-                <button
+                <div
                   key={wf.path}
-                  onClick={() => selectWorkflow(wf.path)}
+                  onClick={() => {
+                    selectWorkflow(wf.path);
+                    addRecent(wf.path);
+                  }}
                   className={cn(
-                    "w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded-md transition-colors text-left",
+                    "w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded-md transition-colors cursor-pointer",
                     selectedWorkflowId === wf.path
                       ? "bg-primary text-primary-foreground"
                       : "hover:bg-accent hover:text-accent-foreground"
@@ -76,7 +111,20 @@ export function WorkflowList() {
                   {dirtyWorkflows[wf.path] && (
                     <div className="h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0" />
                   )}
-                </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleFavorite(wf.path);
+                    }}
+                    className="shrink-0 p-0.5 hover:bg-muted-foreground/20 rounded"
+                  >
+                    {settings.favorites?.includes(wf.path) ? (
+                      <Star className="h-3 w-3 fill-yellow-500 text-yellow-500" />
+                    ) : (
+                      <Star className="h-3 w-3 text-muted-foreground" />
+                    )}
+                  </button>
+                </div>
               ))}
             </div>
           </div>

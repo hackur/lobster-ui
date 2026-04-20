@@ -1,16 +1,115 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { ReactFlowProvider } from "@xyflow/react";
 import { useWorkflowStore } from "@/lib/lobster/store";
 import { workflowsToGraph } from "@/lib/lobster/graph";
+import { type LobsterWorkflow } from "@/lib/lobster/schema";
 import { WorkflowCanvas } from "@/components/flow/WorkflowCanvas";
 import { WorkflowList } from "@/components/shell/WorkflowList";
 import { InspectorPanel } from "@/components/shell/InspectorPanel";
 import { SourceEditor } from "@/components/shell/SourceEditor";
 import { Button } from "@/components/ui/button";
-import { Settings, RefreshCw, Plus, PanelRightClose, PanelRightOpen, Menu, Code, Layout, Download, Upload, Sun, Moon, AlertTriangle, Keyboard } from "lucide-react";
+import { Settings, RefreshCw, Plus, PanelRightClose, PanelRightOpen, Menu, Code, Layout, Download, Upload, Sun, Moon, AlertTriangle, Keyboard, CheckCircle, XCircle, FilePlus, Undo2, Redo2 } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
+
+const WORKFLOW_TEMPLATES = [
+  {
+    id: "basic",
+    name: "Basic Workflow",
+    description: "Simple sequential steps",
+    workflow: {
+      name: "New Workflow",
+      description: "A basic workflow",
+      steps: [
+        { id: "step1", run: "echo 'Hello'" },
+        { id: "step2", run: "echo 'Done'" },
+      ],
+    },
+  },
+  {
+    id: "llm-pipeline",
+    name: "LLM Pipeline",
+    description: "Multi-step LLM processing",
+    workflow: {
+      name: "LLM Pipeline",
+      description: "Process data with LLM",
+      steps: [
+        { id: "extract", pipeline: "llm.invoke --prompt 'Extract key info' $" },
+        { id: "transform", pipeline: "llm.invoke --prompt 'Transform data' $.output" },
+        { id: "save", run: "cat > output.json" },
+      ],
+    },
+  },
+  {
+    id: "approval-gate",
+    name: "Approval Gate",
+    description: "Requires human approval",
+    workflow: {
+      name: "Approval Workflow",
+      description: "Waits for approval before proceeding",
+      steps: [
+        { id: "prepare", run: "echo 'Ready for review'" },
+        { id: "approval", approval: "required" },
+        { id: "execute", run: "echo 'Approved, proceeding'" },
+      ],
+    },
+  },
+  {
+    id: "parallel-processing",
+    name: "Parallel Processing",
+    description: "Run tasks concurrently",
+    workflow: {
+      name: "Parallel Workflow",
+      description: "Process multiple items in parallel",
+      steps: [
+        { id: "split", run: "echo 'items'" },
+        { 
+          id: "process", 
+          parallel: { 
+            branches: [
+              { id: "branch1", run: "echo 'process 1'" },
+              { id: "branch2", run: "echo 'process 2'" },
+              { id: "branch3", run: "echo 'process 3'" },
+            ] 
+          } 
+        },
+        { id: "merge", run: "echo 'All done'" },
+      ],
+    },
+  },
+  {
+    id: "batch-loop",
+    name: "Batch Loop",
+    description: "Process items in a loop",
+    workflow: {
+      name: "Batch Workflow",
+      description: "Process each item",
+      steps: [
+        { id: "fetch", run: "curl -s https://api.example.com/items" },
+        { id: "process", for_each: "$.json", steps: [{ id: "item", run: "echo ${item}" }] },
+      ],
+    },
+  },
+  {
+    id: "error-handling",
+    name: "With Error Handling",
+    description: "Retry and error handling",
+    workflow: {
+      name: "Resilient Workflow",
+      description: "Handles failures gracefully",
+      steps: [
+        { 
+          id: "main", 
+          run: "npm run task",
+          retry: { max: 3, backoff: "exponential", delay_ms: 1000, jitter: true },
+          on_error: "continue",
+        },
+        { id: "fallback", run: "echo 'Using fallback'" },
+      ],
+    },
+  },
+];
 
 export default function Home() {
   const {
@@ -30,12 +129,14 @@ export default function Home() {
     undo,
     redo,
     envWarnings,
+    validationErrors,
   } = useWorkflowStore();
 
   const { theme, setTheme } = useTheme();
   const [showInspector, setShowInspector] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
 
   const workflow = workflows.find((w) => w.path === selectedWorkflowId);
   const graph = workflow ? workflowsToGraph(workflow.workflow, layouts[workflow.path]?.nodes) : { nodes: [], edges: [] };
@@ -94,6 +195,27 @@ export default function Home() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [selectedWorkflowId, saveWorkflow, selectNode, undo, redo]);
 
+  // Auto-save with debounce
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  useEffect(() => {
+    if (!settings.autoSave || !selectedWorkflowId || !dirtyWorkflows[selectedWorkflowId]) return;
+    
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    
+    saveTimeoutRef.current = setTimeout(() => {
+      saveWorkflow(selectedWorkflowId);
+    }, 3000); // Auto-save after 3 seconds of inactivity
+    
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [dirtyWorkflows, selectedWorkflowId, saveWorkflow, settings.autoSave]);
+
   const handleSave = async () => {
     if (!selectedWorkflowId) return;
     setIsLoading(true);
@@ -113,12 +235,14 @@ export default function Home() {
   };
 
   const handleConfigs = async () => {
-    const newDirs = prompt("Enter workflow directories (comma-separated):", settings.workflowDirs.join(", "));
-    if (newDirs !== null) {
-      const dirs = newDirs.split(",").map((d) => d.trim()).filter(Boolean);
+    const dirsInput = prompt("Enter workflow directories (comma-separated):", settings.workflowDirs.join(", "));
+    if (dirsInput !== null) {
+      const dirs = dirsInput.split(",").map((d) => d.trim()).filter(Boolean);
       updateSettings({ workflowDirs: dirs });
       await loadWorkflows(dirs);
     }
+    const autoSaveInput = confirm("Enable auto-save?");
+    updateSettings({ autoSave: autoSaveInput });
   };
 
   const handleNewWorkflow = async () => {
@@ -251,6 +375,12 @@ export default function Home() {
             >
               Export Mermaid
             </button>
+            <button
+              className="w-full px-3 py-2 text-left text-sm hover:bg-muted"
+              onClick={() => handleExport("ts")}
+            >
+              Export TypeScript
+            </button>
           </div>
         </div>
         <Button variant="ghost" size="icon" onClick={handleImport} title="Import">
@@ -283,10 +413,45 @@ export default function Home() {
         >
           <Keyboard className="h-4 w-4" />
         </Button>
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          onClick={() => setShowTemplates(true)}
+          title="Workflow Templates"
+        >
+          <FilePlus className="h-4 w-4" />
+        </Button>
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          onClick={() => undo()}
+          disabled={!useWorkflowStore.getState().canUndo()}
+          title="Undo"
+        >
+          <Undo2 className="h-4 w-4" />
+        </Button>
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          onClick={() => redo()}
+          disabled={!useWorkflowStore.getState().canRedo()}
+          title="Redo"
+        >
+          <Redo2 className="h-4 w-4" />
+        </Button>
         {envWarnings.length > 0 && (
           <div className="relative" title={`${envWarnings.length} env warnings`}>
             <AlertTriangle className="h-4 w-4 text-amber-500" />
             <span className="absolute -top-1 -right-1 h-2 w-2 bg-amber-500 rounded-full" />
+          </div>
+        )}
+        {selectedWorkflowId && (
+          <div className="flex items-center gap-1" title={validationErrors.length > 0 ? `${validationErrors.length} validation errors` : "Workflow healthy"}>
+            {validationErrors.length > 0 ? (
+              <XCircle className="h-4 w-4 text-destructive" />
+            ) : (
+              <CheckCircle className="h-4 w-4 text-green-500" />
+            )}
           </div>
         )}
         <Button 
@@ -378,6 +543,51 @@ export default function Home() {
                 <span className="text-muted-foreground">Deselect</span>
                 <kbd className="px-2 py-0.5 bg-muted rounded text-xs">Esc</kbd>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Workflow Templates Modal */}
+      {showTemplates && (
+        <div className="fixed inset-0 bg-background/80 flex items-center justify-center z-50" onClick={() => setShowTemplates(false)}>
+          <div className="bg-background border rounded-lg shadow-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold">Workflow Templates</h2>
+              <Button variant="ghost" size="sm" onClick={() => setShowTemplates(false)}>×</Button>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { id: "basic", name: "Basic", desc: "Simple sequential steps", icon: "📋" },
+                { id: "llm-pipeline", name: "LLM Pipeline", desc: "Multi-step LLM", icon: "🤖" },
+                { id: "approval-gate", name: "Approval Gate", desc: "Requires approval", icon: "✅" },
+                { id: "parallel", name: "Parallel", desc: "Concurrent tasks", icon: "⚡" },
+                { id: "loop", name: "Batch Loop", desc: "Process items", icon: "🔄" },
+                { id: "error-handling", name: "Error Handling", desc: "With retries", icon: "🛡️" },
+              ].map((t) => (
+                <button
+                  key={t.id}
+                  className="p-4 border rounded-lg text-left hover:bg-muted transition-colors"
+                  onClick={() => {
+                    const template = WORKFLOW_TEMPLATES.find(w => w.id === t.id);
+                    if (template) {
+                      const dir = settings.workflowDirs[0] || DEFAULT_DIR;
+                      createWorkflow(template.workflow.name || "New Workflow", dir).then(path => {
+                        if (path) {
+                          const { updateWorkflow } = useWorkflowStore.getState();
+                          updateWorkflow(path, template.workflow as LobsterWorkflow);
+                          selectWorkflow(path);
+                        }
+                      });
+                    }
+                    setShowTemplates(false);
+                  }}
+                >
+                  <div className="text-2xl mb-2">{t.icon}</div>
+                  <div className="font-medium">{t.name}</div>
+                  <div className="text-xs text-muted-foreground">{t.desc}</div>
+                </button>
+              ))}
             </div>
           </div>
         </div>
